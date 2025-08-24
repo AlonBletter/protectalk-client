@@ -5,4 +5,5 @@ object Routes {
     const val Verification = "verification/{phone}"
     const val Home = "home"
     const val Protection = "protection"
+    const val Settings = "settings"
 }

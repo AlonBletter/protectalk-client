@@ -59,7 +59,7 @@ fun RegistrationScreen(
                         .height(48.dp)
                 ) { Text("Continue") }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
 
                 Text(
                     "By continuing you agree to our basic terms (placeholder).",
