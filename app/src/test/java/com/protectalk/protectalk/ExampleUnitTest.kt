@@ -1,4 +1,4 @@
-package com.protectalk.client
+package com.protectalk.protectalk
 
 import org.junit.Test
 

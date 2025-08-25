@@ -1,4 +1,4 @@
-package com.protectalk.client.ui.theme
+package com.protectalk.protectalk.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

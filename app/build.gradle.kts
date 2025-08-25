@@ -2,14 +2,15 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services) // applies the Google Services plugin
 }
 
 android {
-    namespace = "com.protectalk.client"
+    namespace = "com.protectalk.protectalk"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.protectalk.client"
+        applicationId = "com.protectalk.protectalk"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -45,9 +46,18 @@ android {
 
 dependencies {
 
+    // --- Firebase (BOM + Auth) ---
+    implementation(platform(libs.firebase.bom))
+    implementation("com.google.firebase:firebase-auth-ktx")  // no version on purpose
+
     implementation("androidx.activity:activity-compose:1.8.0")
     implementation("androidx.compose.ui:ui:1.5.3")
     implementation("androidx.compose.material3:material3:1.1.2")
+
+    // Material Icons
+    implementation(libs.material.icons.core)
+    implementation(libs.androidx.material.icons.extended)
+
     implementation("androidx.navigation:navigation-compose:2.7.3")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
