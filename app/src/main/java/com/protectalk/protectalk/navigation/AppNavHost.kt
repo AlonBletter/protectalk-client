@@ -43,34 +43,37 @@ private val bottomItems = listOf(
 @Composable
 fun AppNavHost(navController: NavHostController) {
     val authViewModel: AuthViewModel = viewModel()
+    val isSignedIn by authViewModel.ui.collectAsState()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDest = navBackStackEntry?.destination
-    val isSignedIn = authViewModel.ui.collectAsState().value.isSignedIn
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    val showBar = currentRoute?.startsWith(Graph.Main) == true ||
+            currentRoute in listOf(Routes.Home, Routes.Protection, Routes.Settings)
 
     Scaffold(
         bottomBar = {
-            val route = currentDest?.route
-            val showBar = route != Routes.Splash && route != Routes.Registration
             if (showBar) {
                 NavigationBar {
-                    bottomItems.forEach { item ->
-                        val selected = currentDest.isRouteInHierarchy(item.route)
+                    listOf(
+                        Routes.Home to Icons.Default.Home,
+                        Routes.Protection to Icons.Default.Shield,
+                        Routes.Settings to Icons.Default.Settings
+                    ).forEach { (route, icon) ->
+                        val selected = navBackStackEntry?.destination?.hierarchy?.any { it.route == route } == true
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
                                 if (!selected) {
-                                    navController.navigate(item.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                         launchSingleTop = true
                                         restoreState = true
                                     }
                                 }
                             },
-                            icon = { Icon(item.icon, contentDescription = item.label) },
-                            label = { Text(item.label) }
+                            icon = { Icon(icon, null) },
+                            label = { Text(route.replaceFirstChar(Char::uppercase)) }
                         )
                     }
                 }
@@ -80,85 +83,95 @@ fun AppNavHost(navController: NavHostController) {
         NavHost(
             navController = navController,
             startDestination = Routes.Splash,
-            modifier = Modifier.padding(padding)
+            modifier = Modifier.padding(padding),
+            route = Graph.Root
         ) {
+            // Splash decides graph
             composable(Routes.Splash) {
                 SplashScreen()
-                LaunchedEffect(isSignedIn) {
-                    navController.navigate(if (isSignedIn) Routes.Home else Routes.Registration) {
-                        popUpTo(Routes.Splash) { inclusive = true }
+                LaunchedEffect(isSignedIn.isSignedIn) {
+                    navController.navigate(if (isSignedIn.isSignedIn) Graph.Main else Graph.Auth) {
+                        popUpTo(Graph.Root) { inclusive = false } // keep root
                         launchSingleTop = true
                     }
                 }
             }
 
-            composable(Routes.Registration) {
-                val ui = authViewModel.ui.collectAsState().value
-                RegistrationScreen(
-                    onRegister = { email, password ->
-                        authViewModel.signUp(
-                            email = email,
-                            password = password,
-                            onSuccess = {
-                                navController.navigate(Routes.Home) {
-                                    popUpTo(Routes.Registration) { inclusive = true }
-                                    launchSingleTop = true
-                                }
-                            },
-                            onError = { /* ui.error already reflected */ }
-                        )
-                    },
-                    onNavigateToLogin = { navController.navigate(Routes.Login) },
-                    serverError = ui.error,
-                    isSubmittingExternal = ui.isSubmitting
-                )
+            // ---------- AUTH GRAPH ----------
+            navigation(
+                route = Graph.Auth,
+                startDestination = Routes.Registration
+            ) {
+                composable(Routes.Registration) {
+                    val ui = authViewModel.ui.collectAsState().value
+                    RegistrationScreen(
+                        onRegister = { email, password ->
+                            authViewModel.signUp(
+                                email = email,
+                                password = password,
+                                onSuccess = {
+                                    // enter Main graph and clear Auth graph
+                                    navController.navigate(Graph.Main) {
+                                        popUpTo(Graph.Auth) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onError = { /* ui.error already surfaces */ }
+                            )
+                        },
+                        onNavigateToLogin = { navController.navigate(Routes.Login) },
+                        serverError = ui.error,
+                        isSubmittingExternal = ui.isSubmitting
+                    )
+                }
+
+                composable(Routes.Login) {
+                    val ui = authViewModel.ui.collectAsState().value
+                    LoginScreen(
+                        onLogin = { email, password ->
+                            authViewModel.signIn(
+                                email = email,
+                                password = password,
+                                onSuccess = {
+                                    navController.navigate(Graph.Main) {
+                                        popUpTo(Graph.Auth) { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onError = { /* ui.error already surfaces */ }
+                            )
+                        },
+                        onBackToRegister = { navController.popBackStack() },
+                        onForgotPassword = {
+                            // TODO(Firebase): FirebaseAuth.getInstance().sendPasswordResetEmail(email)
+                        },
+                        serverError = ui.error,
+                        isSubmittingExternal = ui.isSubmitting
+                    )
+                }
             }
 
-            composable(Routes.Login) {
-                val ui = authViewModel.ui.collectAsState().value
-                LoginScreen(
-                    onLogin = { email, password ->
-                        authViewModel.signIn(
-                            email = email,
-                            password = password,
-                            onSuccess = {
-                                navController.navigate(Routes.Home) {
-                                    popUpTo(Routes.Registration) { inclusive = true } // clear auth stack
-                                    launchSingleTop = true
-                                }
-                            },
-                            onError = { /* ui.error already reflected */ }
-                        )
-                    },
-                    onBackToRegister = { navController.popBackStack() },
-                    onForgotPassword = {
-                        // TODO(Firebase): FirebaseAuth.getInstance().sendPasswordResetEmail(email)
-                        // Optionally show a snackbar/toast on success/failure
-                    },
-                    serverError = ui.error,
-                    isSubmittingExternal = ui.isSubmitting
-                )
-            }
-
-            composable(Routes.Home) { HomeScreen() }
-            composable(Routes.Protection) { ProtectionScreen() }
-            composable(Routes.Settings) {
-                val email = FirebaseAuth.getInstance().currentUser?.email
-                SettingsScreen(
-                    email = email,
-                    onLogout = {
-                        // 1) Sign out in VM (source of truth for Splash)
-                        authViewModel.signOut() // sets isSignedIn = false
-
-                        // 2) Navigate to Registration and clear back stack
-                        navController.navigate(Routes.Registration) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                inclusive = true
+            // ---------- MAIN GRAPH ----------
+            navigation(
+                route = Graph.Main,
+                startDestination = Routes.Home
+            ) {
+                composable(Routes.Home) { HomeScreen() }
+                composable(Routes.Protection) { ProtectionScreen() }
+                composable(Routes.Settings) {
+                    val email = FirebaseAuth.getInstance().currentUser?.email
+                    SettingsScreen(
+                        email = email,
+                        onLogout = {
+                            authViewModel.signOut()
+                            // enter Auth graph and clear Main graph
+                            navController.navigate(Graph.Auth) {
+                                popUpTo(Graph.Main) { inclusive = true }
+                                launchSingleTop = true
                             }
-                            launchSingleTop = true
                         }
-                    }
-                )
+                    )
+                }
             }
         }
     }
