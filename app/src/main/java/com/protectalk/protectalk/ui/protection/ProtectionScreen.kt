@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
-package com.protectalk.client.ui.protection
+package com.protectalk.protectalk.ui.protection
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*

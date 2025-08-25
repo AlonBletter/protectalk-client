@@ -1,4 +1,4 @@
-package com.protectalk.client.ui.home
+package com.protectalk.protectalk.ui.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*

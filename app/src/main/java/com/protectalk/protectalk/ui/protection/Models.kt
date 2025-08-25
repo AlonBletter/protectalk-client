@@ -1,4 +1,4 @@
-package com.protectalk.client.ui.protection
+package com.protectalk.protectalk.ui.protection
 
 // UI-only models (replace with real entities later)
 enum class Relation { Family, Friend, Other }

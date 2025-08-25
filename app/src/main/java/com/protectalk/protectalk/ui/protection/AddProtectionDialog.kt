@@ -1,6 +1,6 @@
 @file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 
-package com.protectalk.client.ui.protection
+package com.protectalk.protectalk.ui.protection
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -70,7 +70,10 @@ fun AddProtectionDialog(
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = relationMenuOpen) },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .menuAnchor()
+                            .menuAnchor(
+                                type = MenuAnchorType.PrimaryNotEditable,
+                                enabled = true
+                            )
                     )
                     ExposedDropdownMenu(
                         expanded = relationMenuOpen,

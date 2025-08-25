@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package com.protectalk.client.ui.registration
+package com.protectalk.protectalk.ui.registration
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -83,8 +83,11 @@ fun VerificationScreen(
                         localError = null
                         viewModel.verifyCode(
                             code = code,
-                            onSuccess = onVerified,
-                            onError = { msg -> localError = msg } // show simple inline message
+                            onSuccess = {
+                                viewModel.markSignedIn() // ✅ set session so Splash skips auth next launch
+                                onVerified()             // navigate (handled in AppNavHost)
+                            },
+                            onError = { msg -> localError = msg }
                         )
                     },
                     enabled = code.length == 6 && !ui.isVerifying,

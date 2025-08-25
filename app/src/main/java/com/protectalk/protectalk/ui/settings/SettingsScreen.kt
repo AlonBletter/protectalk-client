@@ -1,4 +1,4 @@
-package com.protectalk.client.ui.settings
+package com.protectalk.protectalk.ui.settings
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*

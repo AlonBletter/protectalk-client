@@ -1,4 +1,4 @@
-package com.protectalk.client.ui.registration
+package com.protectalk.protectalk.ui.registration
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,6 +17,7 @@ data class AuthUiState(
     // Firebase bits
     val verificationId: String? = null,   // TODO(Firebase): set in onCodeSent
     val resendToken: Any? = null,         // TODO(Firebase): replace Any with PhoneAuthProvider.ForceResendingToken
+    val isSignedIn: Boolean = false,      // TODO(Firebase): derive from FirebaseAuth.getInstance().currentUser
 
     // Countdown for "Resend"
     val secondsLeft: Int = 60
@@ -28,6 +29,16 @@ class AuthViewModel : ViewModel() {
     val ui: StateFlow<AuthUiState> = _ui.asStateFlow()
 
     // --- Public API for your screens ---
+
+    fun markSignedIn() {
+        _ui.value = _ui.value.copy(isSignedIn = true)
+        // TODO(Firebase): not needed once you rely on FirebaseAuth.getInstance().currentUser
+    }
+
+    init {
+        // TODO(Firebase): on app start, set isSignedIn = (FirebaseAuth.getInstance().currentUser != null)
+        // _ui.value = _ui.value.copy(isSignedIn = FirebaseAuth.getInstance().currentUser != null)
+    }
 
     fun setPhone(phone: String) {
         _ui.value = _ui.value.copy(phone = phone, error = null)

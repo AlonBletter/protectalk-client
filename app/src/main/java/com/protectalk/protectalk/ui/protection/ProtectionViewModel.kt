@@ -1,4 +1,4 @@
-package com.protectalk.client.ui.protection
+package com.protectalk.protectalk.ui.protection
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
