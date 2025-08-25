@@ -11,9 +11,12 @@ activityCompose = "1.8.0"
 composeBom = "2024.09.00"
 foundation = "1.9.0"
 gmsPlugin = "4.4.3"
+materialIconsCoreVersion = "<latest-version>"
+materialIconsExtended = "<latest-version>"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-material-icons-extended = { module = "androidx.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
 firebase-bom = { module = "com.google.firebase:firebase-bom", version.ref = "firebaseBom" }
 firebase-auth-ktx = { module = "com.google.firebase:firebase-auth-ktx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -30,6 +33,7 @@ androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-man
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+material-icons-core = { module = "androidx.compose.material:material-icons-core", version.ref = "materialIconsCoreVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
