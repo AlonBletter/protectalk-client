@@ -13,9 +13,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-
-private const val TOTAL_SECONDS = 60
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Preview(showBackground = true)
 @Composable
@@ -29,21 +27,17 @@ private fun VerificationScreen_Preview() {
 @Composable
 fun VerificationScreen(
     phoneNumber: String,
-    onVerified: () -> Unit
+    onVerified: () -> Unit,
+    viewModel: AuthViewModel = viewModel()     // ← inject the VM
 ) {
     var code by rememberSaveable { mutableStateOf("") }
+    var localError by remember { mutableStateOf<String?>(null) }
 
-    // countdown state
-    var secondsLeft by rememberSaveable { mutableIntStateOf(TOTAL_SECONDS) }
-    val isResendEnabled by remember { derivedStateOf { secondsLeft == 0 } }
-
-    // Start / maintain countdown
-    LaunchedEffect(secondsLeft) {
-        if (secondsLeft > 0) {
-            delay(1_000)
-            secondsLeft -= 1
-        }
-    }
+    // Read VM state (countdown, errors, etc.)
+    val ui = viewModel.ui.collectAsState().value
+    val secondsLeft = ui.secondsLeft
+    val isResendEnabled = secondsLeft == 0
+    val errorToShow = localError ?: ui.error
 
     Scaffold(
         topBar = {
@@ -86,25 +80,25 @@ fun VerificationScreen(
 
                 Button(
                     onClick = {
-                        // TODO: Firebase sign-in with verificationId + code:
-                        //  val credential = PhoneAuthProvider.getCredential(verificationId, code)
-                        //  FirebaseAuth.getInstance().signInWithCredential(credential) { ... }
-                        onVerified()
+                        localError = null
+                        viewModel.verifyCode(
+                            code = code,
+                            onSuccess = onVerified,
+                            onError = { msg -> localError = msg } // show simple inline message
+                        )
                     },
-                    enabled = code.length == 6,
+                    enabled = code.length == 6 && !ui.isVerifying,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
-                ) { Text("Verify") }
+                ) { Text(if (ui.isVerifying) "Verifying..." else "Verify") }
 
                 Spacer(Modifier.height(10.dp))
 
                 TextButton(
                     onClick = {
-                        // TODO: Firebase resend with resendToken:
-                        //  PhoneAuthProvider.verifyPhoneNumber(options.withResendToken(resendToken))
-                        // restart the countdown UI
-                        secondsLeft = TOTAL_SECONDS
+                        localError = null
+                        viewModel.resendCode()  // VM handles restarting countdown
                     },
                     enabled = isResendEnabled
                 ) {
@@ -114,8 +108,16 @@ fun VerificationScreen(
                     )
                 }
 
-                // TODO: Show Firebase error messages (e.g., invalid code) below:
-                // Text(errorMessage, color = MaterialTheme.colorScheme.error)
+                // Inline error (VM or local)
+                if (!errorToShow.isNullOrBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        errorToShow!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }

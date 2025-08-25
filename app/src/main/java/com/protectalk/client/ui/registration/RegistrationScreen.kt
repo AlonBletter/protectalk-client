@@ -11,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Preview(showBackground = true)
 @Composable
@@ -20,7 +21,8 @@ private fun RegistrationScreen_Preview() {
 
 @Composable
 fun RegistrationScreen(
-    onContinue: (phone: String) -> Unit
+    onContinue: (phone: String) -> Unit,
+    viewModel: AuthViewModel = viewModel()   // ← inject VM (keeps look identical)
 ) {
     var phone by remember { mutableStateOf("") }
 
@@ -56,9 +58,10 @@ fun RegistrationScreen(
 
                 Button(
                     onClick = {
-                        // TODO: Start Firebase phone auth: verifyPhoneNumber(phone)
-                        //  - Save verificationId/resendToken in ViewModel or rememberSaveable
-                        onContinue(phone)
+                        // Hand off to AuthViewModel (UI-only stub for now)
+                        viewModel.setPhone(phone)
+                        viewModel.startPhoneVerification() // TODO(Firebase): real PhoneAuthOptions w/ Activity
+                        onContinue(phone)                  // navigate to Verification
                     },
                     enabled = phone.isNotBlank(),
                     modifier = Modifier
