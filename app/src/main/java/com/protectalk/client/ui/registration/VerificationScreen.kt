@@ -4,24 +4,32 @@ package com.protectalk.client.ui.registration
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 private const val TOTAL_SECONDS = 60
 
+@Preview(showBackground = true)
+@Composable
+private fun VerificationScreen_Preview() {
+    VerificationScreen(
+        phoneNumber = "+972-52-8849-564",
+        onVerified = {}
+    )
+}
+
 @Composable
 fun VerificationScreen(
     phoneNumber: String,
-    onVerified: () -> Unit,
-    onBack: () -> Unit
+    onVerified: () -> Unit
 ) {
     var code by rememberSaveable { mutableStateOf("") }
 
@@ -51,14 +59,15 @@ fun VerificationScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 20.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 20.dp, vertical = 150.dp)
                     .widthIn(max = 420.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = "We sent an SMS code to\n$phoneNumber",
-                    style = MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center
                 )
 
                 Spacer(Modifier.height(16.dp))

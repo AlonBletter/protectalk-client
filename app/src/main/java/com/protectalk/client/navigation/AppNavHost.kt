@@ -96,8 +96,7 @@ fun AppNavHost(navController: NavHostController) {
                             popUpTo(Routes.Registration) { inclusive = true } // clear auth screens
                             launchSingleTop = true
                         }
-                    },
-                    onBack = { /* no-op: no back in auth */ }
+                    }
                 )
             }
 

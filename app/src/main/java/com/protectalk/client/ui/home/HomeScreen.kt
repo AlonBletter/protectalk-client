@@ -5,7 +5,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+
+@Preview(showBackground = true)
+@Composable
+private fun HomeScreen_Preview() {
+    HomeScreen()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -20,8 +27,8 @@ fun HomeScreen() {
         ) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 20.dp)
+                    .align(Alignment.TopStart)
+                    .padding(horizontal = 20.dp, vertical = 150.dp)
                     .widthIn(max = 480.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {

@@ -9,7 +9,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+
+@Preview(showBackground = true)
+@Composable
+private fun RegistrationScreen_Preview() {
+    RegistrationScreen(onContinue = { /* no-op for preview */ })
+}
 
 @Composable
 fun RegistrationScreen(
@@ -27,8 +34,8 @@ fun RegistrationScreen(
         ) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 20.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 20.dp, vertical = 150.dp)
                     .widthIn(max = 420.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
