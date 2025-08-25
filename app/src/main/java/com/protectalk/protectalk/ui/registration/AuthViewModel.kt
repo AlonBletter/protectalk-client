@@ -1,5 +1,12 @@
 package com.protectalk.protectalk.ui.registration
 
+import android.app.Activity
+import android.util.Log
+import com.google.firebase.FirebaseException
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.PhoneAuthCredential
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
@@ -7,126 +14,177 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 data class AuthUiState(
     val phone: String = "",
     val isSendingCode: Boolean = false,
     val isVerifying: Boolean = false,
     val error: String? = null,
-
-    // Firebase bits
-    val verificationId: String? = null,   // TODO(Firebase): set in onCodeSent
-    val resendToken: Any? = null,         // TODO(Firebase): replace Any with PhoneAuthProvider.ForceResendingToken
-    val isSignedIn: Boolean = false,      // TODO(Firebase): derive from FirebaseAuth.getInstance().currentUser
-
-    // Countdown for "Resend"
-    val secondsLeft: Int = 60
+    val verificationId: String? = null,
+    val resendToken: PhoneAuthProvider.ForceResendingToken? = null,
+    val secondsLeft: Int = 0,
+    val isSignedIn: Boolean = false
 )
 
 class AuthViewModel : ViewModel() {
 
+    private val auth = FirebaseAuth.getInstance()
     private val _ui = MutableStateFlow(AuthUiState())
     val ui: StateFlow<AuthUiState> = _ui.asStateFlow()
 
-    // --- Public API for your screens ---
-
-    fun markSignedIn() {
-        _ui.value = _ui.value.copy(isSignedIn = true)
-        // TODO(Firebase): not needed once you rely on FirebaseAuth.getInstance().currentUser
-    }
+    private val TAG = "AuthVM"
 
     init {
-        // TODO(Firebase): on app start, set isSignedIn = (FirebaseAuth.getInstance().currentUser != null)
-        // _ui.value = _ui.value.copy(isSignedIn = FirebaseAuth.getInstance().currentUser != null)
+        val signedIn = auth.currentUser != null
+        Log.d(TAG, "init: currentUser=${auth.currentUser?.uid}, signedIn=$signedIn")
+        _ui.value = _ui.value.copy(isSignedIn = signedIn)
     }
 
     fun setPhone(phone: String) {
+        Log.d(TAG, "setPhone: $phone")
         _ui.value = _ui.value.copy(phone = phone, error = null)
     }
 
-    fun startPhoneVerification() {
+    fun markSignedIn() {
+        Log.d(TAG, "markSignedIn() called")
+        _ui.value = _ui.value.copy(isSignedIn = true)
+    }
+
+    fun startPhoneVerification(activity: Activity) {
         val phone = _ui.value.phone.trim()
         if (phone.isBlank()) {
+            Log.w(TAG, "startPhoneVerification: phone is blank")
             _ui.value = _ui.value.copy(error = "Phone is empty")
             return
         }
 
-        // Optimistically start sending
+        Log.d(TAG, "startPhoneVerification: requesting code for $phone")
         _ui.value = _ui.value.copy(isSendingCode = true, error = null)
 
-        // TODO(Firebase): build PhoneAuthOptions with activity + callbacks
-        //  val options = PhoneAuthOptions.newBuilder(FirebaseAuth.getInstance())
-        //      .setPhoneNumber(phone)
-        //      .setTimeout(60L, TimeUnit.SECONDS)
-        //      .setActivity(activity) // pass from Composable call-site
-        //      .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-        //          override fun onVerificationCompleted(credential: PhoneAuthCredential) { /* auto-retrieval */ }
-        //          override fun onVerificationFailed(e: FirebaseException) {
-        //              _ui.value = _ui.value.copy(isSendingCode = false, error = e.message)
-        //          }
-        //          override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
-        //              _ui.value = _ui.value.copy(
-        //                  isSendingCode = false,
-        //                  verificationId = verificationId,
-        //                  resendToken = token,
-        //                  secondsLeft = 60
-        //              )
-        //              startCountdown()  // kick off UI countdown
-        //          }
-        //      })
-        //  PhoneAuthProvider.verifyPhoneNumber(options)
+        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                Log.d(TAG, "onVerificationCompleted: auto-retrieval or instant verification")
+                // Optional: auth.signInWithCredential(credential)
+            }
 
-        // TEMP (UI-only demo): pretend code sent successfully
-        _ui.value = _ui.value.copy(isSendingCode = false, verificationId = "demo_ver_id", secondsLeft = 60)
-        startCountdown()
+            override fun onVerificationFailed(e: FirebaseException) {
+                Log.e(TAG, "onVerificationFailed: ${e.message}", e)
+                _ui.value = _ui.value.copy(isSendingCode = false, error = e.localizedMessage ?: "Verification failed")
+            }
+
+            override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
+                Log.d(TAG, "onCodeSent: verificationId=$verificationId, token=$token")
+                _ui.value = _ui.value.copy(
+                    isSendingCode = false,
+                    verificationId = verificationId,
+                    resendToken = token,
+                    secondsLeft = 60
+                )
+                startCountdown()
+            }
+
+            override fun onCodeAutoRetrievalTimeOut(verificationId: String) {
+                Log.w(TAG, "onCodeAutoRetrievalTimeOut for verificationId=$verificationId")
+            }
+        }
+
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(phone)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+            .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(options)
     }
 
     fun verifyCode(code: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val verificationId = _ui.value.verificationId
+        if (verificationId.isNullOrBlank()) {
+            Log.e(TAG, "verifyCode: verificationId is null/blank")
+            onError("No verification ID")
+            return
+        }
         if (code.length != 6) {
+            Log.w(TAG, "verifyCode: invalid code length=${code.length}")
             onError("Code must be 6 digits")
             return
         }
+
+        Log.d(TAG, "verifyCode: using verificationId=$verificationId, code=$code")
         _ui.value = _ui.value.copy(isVerifying = true, error = null)
+        val credential = PhoneAuthProvider.getCredential(verificationId, code)
 
-        // TODO(Firebase):
-        // val credential = PhoneAuthProvider.getCredential(_ui.value.verificationId!!, code)
-        // FirebaseAuth.getInstance().signInWithCredential(credential)
-        //   .addOnCompleteListener { task ->
-        //       _ui.value = _ui.value.copy(isVerifying = false)
-        //       if (task.isSuccessful) onSuccess() else onError(task.exception?.message ?: "Verification failed")
-        //   }
+        auth.signInWithCredential(credential)
+            .addOnCompleteListener { task ->
+                _ui.value = _ui.value.copy(isVerifying = false)
+                if (task.isSuccessful) {
+                    Log.d(TAG, "signInWithCredential: success uid=${task.result?.user?.uid}")
+                    _ui.value = _ui.value.copy(isSignedIn = true, error = null)
+                    onSuccess()
+                } else {
+                    val msg = task.exception?.localizedMessage ?: "Verification failed"
+                    Log.e(TAG, "signInWithCredential: failed: $msg", task.exception)
+                    _ui.value = _ui.value.copy(error = msg)
+                    onError(msg)
+                }
+            }
+    }
 
-        // TEMP (UI-only demo)
-        viewModelScope.launch {
-            delay(700)
-            _ui.value = _ui.value.copy(isVerifying = false)
-            if (code == "000000") onError("Invalid code (demo)") else onSuccess()
+    fun resendCode(activity: Activity) {
+        if (_ui.value.secondsLeft > 0) {
+            Log.w(TAG, "resendCode: too early, secondsLeft=${_ui.value.secondsLeft}")
+            return
         }
+        val token = _ui.value.resendToken ?: run {
+            Log.w(TAG, "resendCode: no resendToken available")
+            _ui.value = _ui.value.copy(error = "Resend not available yet")
+            return
+        }
+
+        Log.d(TAG, "resendCode: requesting resend for ${_ui.value.phone}")
+
+        val callbacks = object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                Log.d(TAG, "resendCode: onVerificationCompleted")
+            }
+
+            override fun onVerificationFailed(e: FirebaseException) {
+                Log.e(TAG, "resendCode: onVerificationFailed: ${e.message}", e)
+                _ui.value = _ui.value.copy(error = e.localizedMessage ?: "Resend failed")
+            }
+
+            override fun onCodeSent(verificationId: String, t: PhoneAuthProvider.ForceResendingToken) {
+                Log.d(TAG, "resendCode: onCodeSent verificationId=$verificationId")
+                _ui.value = _ui.value.copy(verificationId = verificationId, resendToken = t, secondsLeft = 60)
+                startCountdown()
+            }
+        }
+
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(_ui.value.phone.trim())
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+            .setForceResendingToken(token)
+            .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(options)
     }
 
-    fun resendCode() {
-        if (_ui.value.secondsLeft > 0) return
-        // TODO(Firebase): reuse resendToken in PhoneAuthOptions.withResendToken(...)
-        // PhoneAuthProvider.verifyPhoneNumber(updatedOptions)
-
-        // TEMP (UI-only demo)
-        _ui.value = _ui.value.copy(secondsLeft = 60, error = null)
-        startCountdown()
-    }
-
-    // --- Countdown driver (shared state for Verification UI) ---
     private fun startCountdown() {
+        Log.d(TAG, "startCountdown: 60s")
         viewModelScope.launch {
             var s = 60
             while (s > 0) {
                 delay(1_000)
                 s--
                 _ui.value = _ui.value.copy(secondsLeft = s)
+                if (s % 10 == 0 || s < 5) {
+                    Log.d(TAG, "countdown: $s")
+                }
             }
         }
-    }
-
-    fun clearError() {
-        _ui.value = _ui.value.copy(error = null)
     }
 }

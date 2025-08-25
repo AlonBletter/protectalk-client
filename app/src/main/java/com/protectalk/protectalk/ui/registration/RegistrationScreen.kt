@@ -2,12 +2,14 @@
 
 package com.protectalk.protectalk.ui.registration
 
+import android.app.Activity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -25,6 +27,7 @@ fun RegistrationScreen(
     viewModel: AuthViewModel = viewModel()   // ← inject VM (keeps look identical)
 ) {
     var phone by remember { mutableStateOf("") }
+    val activity = LocalContext.current as Activity
 
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("ProtecTalk") }) }
@@ -58,10 +61,22 @@ fun RegistrationScreen(
 
                 Button(
                     onClick = {
-                        // Hand off to AuthViewModel (UI-only stub for now)
-                        viewModel.setPhone(phone)
-                        viewModel.startPhoneVerification() // TODO(Firebase): real PhoneAuthOptions w/ Activity
-                        onContinue(phone)                  // navigate to Verification
+                        val normalized = if (phone == "1") {
+                            "+16505551234"
+                        } else {
+                            phone
+                                .trim()
+                                .replace(" ", "")
+                                .replace("-", "")
+                                .replace("(", "")
+                                .replace(")", "")
+                        }
+                        // Ensure it starts with '+' and country code; for IL numbers,
+                        // users might type 052..., you should transform to +97252...
+                        // For now, require they type the '+' country form:
+                        viewModel.setPhone(normalized)
+                        viewModel.startPhoneVerification(activity)
+                        onContinue(normalized)
                     },
                     enabled = phone.isNotBlank(),
                     modifier = Modifier

@@ -2,6 +2,7 @@
 
 package com.protectalk.protectalk.ui.registration
 
+import android.app.Activity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -9,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -32,6 +34,7 @@ fun VerificationScreen(
 ) {
     var code by rememberSaveable { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
+    val activity = LocalContext.current as Activity
 
     // Read VM state (countdown, errors, etc.)
     val ui = viewModel.ui.collectAsState().value
@@ -101,7 +104,7 @@ fun VerificationScreen(
                 TextButton(
                     onClick = {
                         localError = null
-                        viewModel.resendCode()  // VM handles restarting countdown
+                        viewModel.resendCode(activity)  // VM handles restarting countdown
                     },
                     enabled = isResendEnabled
                 ) {
