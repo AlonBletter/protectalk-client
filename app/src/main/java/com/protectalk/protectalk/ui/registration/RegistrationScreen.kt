@@ -21,13 +21,20 @@ import androidx.compose.ui.unit.dp
 @Preview(showBackground = true)
 @Composable
 private fun RegistrationScreen_Preview() {
-    RegistrationScreen(onRegister = { _, _ -> })
+    RegistrationScreen(
+        onRegister = { _, _ -> },
+        onNavigateToLogin = {},
+        serverError = null,
+        isSubmittingExternal = false
+    )
 }
 
 @Composable
 fun RegistrationScreen(
-    onRegister: (email: String, password: String) -> Unit, // will call VM later
-    // later we can inject a VM: viewModel: EmailAuthViewModel = viewModel()
+    onRegister: (email: String, password: String) -> Unit,
+    onNavigateToLogin: () -> Unit,
+    serverError: String? = null,          // ← show VM/ Firebase errors here (e.g., email already in use)
+    isSubmittingExternal: Boolean = false // ← disable while VM is working
 ) {
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -35,7 +42,7 @@ fun RegistrationScreen(
     var showPassword by rememberSaveable { mutableStateOf(false) }
     var showConfirm by rememberSaveable { mutableStateOf(false) }
     var errorText by remember { mutableStateOf<String?>(null) }
-    var isSubmitting by rememberSaveable { mutableStateOf(false) } // UI loading toggle
+    var isSubmitting by rememberSaveable { mutableStateOf(false) } // local UI toggle
 
     fun isValidEmail(s: String): Boolean =
         android.util.Patterns.EMAIL_ADDRESS.matcher(s).matches()
@@ -43,7 +50,9 @@ fun RegistrationScreen(
     val passwordsMatch = password == confirm
     val passwordOk = password.length >= 6
     val emailOk = isValidEmail(email)
-    val canSubmit = emailOk && passwordOk && passwordsMatch && !isSubmitting
+    val anyError = errorText ?: serverError
+    val isWorking = isSubmitting || isSubmittingExternal
+    val canSubmit = emailOk && passwordOk && passwordsMatch && !isWorking
 
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("ProtecTalk") }) }
@@ -113,7 +122,7 @@ fun RegistrationScreen(
 
                 Spacer(Modifier.height(20.dp))
 
-                // Inline validation hints (simple, unobtrusive)
+                // Inline validation hints
                 if (!emailOk && email.isNotBlank()) {
                     Text("Enter a valid email address.", color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(6.dp))
@@ -127,31 +136,40 @@ fun RegistrationScreen(
                     Spacer(Modifier.height(6.dp))
                 }
 
-                // Server/VM error
-                errorText?.let {
-                    Text(it, color = MaterialTheme.colorScheme.error)
+                // Server/VM error (e.g., "The email address is already in use by another account.")
+                anyError?.let {
+                    val friendly = if (it.contains("already in use", ignoreCase = true))
+                        "This email is already registered. Try signing in."
+                    else it
+                    Text(friendly, color = MaterialTheme.colorScheme.error)
                     Spacer(Modifier.height(6.dp))
                 }
 
                 Button(
                     onClick = {
-                        // Basic client validation (extra guard)
                         if (!emailOk) { errorText = "Invalid email format"; return@Button }
                         if (!passwordOk) { errorText = "Password too short"; return@Button }
                         if (!passwordsMatch) { errorText = "Passwords don’t match"; return@Button }
 
+                        errorText = null
                         isSubmitting = true
-                        // TODO(Firebase): call VM -> FirebaseAuth.createUserWithEmailAndPassword(email, password)
-                        //   .addOnCompleteListener { isSubmitting = false; if (it.isSuccessful) onRegister(email, password) else errorText = it.exception?.message }
-                        // For now, just transition:
-                        isSubmitting = false
+                        // Delegate to VM via onRegister; VM will toggle isSubmittingExternal & set serverError
                         onRegister(email, password)
+                        // Leave local spinner minimal; AppNavHost can pass isSubmittingExternal=true while VM works
+                        isSubmitting = false
                     },
                     enabled = canSubmit,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
-                ) { Text(if (isSubmitting) "Creating..." else "Create account") }
+                ) { Text(if (isWorking) "Creating..." else "Create account") }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Already registered? -> Login
+                TextButton(onClick = onNavigateToLogin) {
+                    Text("Already have an account? Sign in")
+                }
 
                 Spacer(Modifier.height(10.dp))
 

@@ -8,10 +8,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun ProtectionScreen(
-    viewModel: ProtectionViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    viewModel: ProtectionViewModel = viewModel()
 ) {
     val ui = viewModel.ui.collectAsState().value
 
