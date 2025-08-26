@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.protectalk.protectalk.ui.login.LoginScreen
 import com.protectalk.protectalk.ui.registration.AuthViewModel
+import com.protectalk.protectalk.ui.registration.UserProfileScreen
 
 private data class NavItem(
     val route: String,
@@ -110,9 +111,8 @@ fun AppNavHost(navController: NavHostController) {
                                 email = email,
                                 password = password,
                                 onSuccess = {
-                                    // enter Main graph and clear Auth graph
-                                    navController.navigate(Graph.Main) {
-                                        popUpTo(Graph.Auth) { inclusive = true }
+                                    // Navigate to profile setup instead of main app
+                                    navController.navigate(Routes.UserProfile) {
                                         launchSingleTop = true
                                     }
                                 },
@@ -122,6 +122,21 @@ fun AppNavHost(navController: NavHostController) {
                         onNavigateToLogin = { navController.navigate(Routes.Login) },
                         serverError = ui.error,
                         isSubmittingExternal = ui.isSubmitting
+                    )
+                }
+
+                composable(Routes.UserProfile) {
+                    UserProfileScreen(
+                        onComplete = {
+                            // After profile completion, go to main app
+                            navController.navigate(Graph.Main) {
+                                popUpTo(Graph.Auth) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onBack = {
+                            navController.popBackStack()
+                        }
                     )
                 }
 

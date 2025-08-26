@@ -10,6 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
+        buildConfigField("String", "BASE_URL", "\"http://localhost:8080/\"")
         applicationId = "com.protectalk.protectalk"
         minSdk = 24
         targetSdk = 36
@@ -37,6 +38,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -45,14 +47,23 @@ android {
 }
 
 dependencies {
-
     // --- Firebase (BOM + Auth) ---
     implementation(platform(libs.firebase.bom))
-    implementation("com.google.firebase:firebase-auth-ktx")  // no version on purpose
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
 
     implementation("androidx.activity:activity-compose:1.8.0")
     implementation("androidx.compose.ui:ui:1.5.3")
     implementation("androidx.compose.material3:material3:1.1.2")
+
+    // Retrofit + Moshi
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+// Coroutines + Tasks
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
     // Material Icons
     implementation(libs.material.icons.core)

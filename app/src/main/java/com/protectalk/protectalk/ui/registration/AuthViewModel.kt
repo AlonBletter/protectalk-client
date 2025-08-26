@@ -2,10 +2,13 @@ package com.protectalk.protectalk.ui.registration
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.protectalk.protectalk.domain.RegisterDeviceUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class AuthUiState(
     val email: String = "",
@@ -15,7 +18,7 @@ data class AuthUiState(
 )
 
 class AuthViewModel : ViewModel() {
-
+    private val registerDevice = RegisterDeviceUseCase()
     private val auth = FirebaseAuth.getInstance()
     private val _ui = MutableStateFlow(AuthUiState())
     val ui: StateFlow<AuthUiState> = _ui.asStateFlow()
@@ -63,6 +66,7 @@ class AuthViewModel : ViewModel() {
                     _ui.value = _ui.value.copy(isSignedIn = true, error = null)
                     // TODO(Optional): send verification email
                     // task.result?.user?.sendEmailVerification()
+                    viewModelScope.launch { registerDevice.invoke() /* TODO: handle ResultModel if you want */ }
                     onSuccess()
                 } else {
                     val msg = task.exception?.localizedMessage ?: "Sign up failed"
@@ -89,6 +93,7 @@ class AuthViewModel : ViewModel() {
                 if (task.isSuccessful) {
                     Log.d(TAG, "signIn success: uid=${task.result?.user?.uid}")
                     _ui.value = _ui.value.copy(isSignedIn = true, error = null)
+                    viewModelScope.launch { registerDevice.invoke() /* best-effort */ }
                     onSuccess()
                 } else {
                     val msg = task.exception?.localizedMessage ?: "Sign in failed"
