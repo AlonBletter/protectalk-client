@@ -1,21 +1,30 @@
 package com.protectalk.protectalk.ui.registration
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
+import com.protectalk.protectalk.data.model.ResultModel
+import com.protectalk.protectalk.domain.CompleteRegistrationUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 data class AuthUiState(
-    val email: String = "",
     val isSubmitting: Boolean = false,
     val error: String? = null,
-    val isSignedIn: Boolean = false
+    val isSignedIn: Boolean = false,
+    val pendingRegistration: PendingRegistrationData? = null
+)
+
+data class PendingRegistrationData(
+    val email: String,
+    val password: String
 )
 
 class AuthViewModel : ViewModel() {
-
     private val auth = FirebaseAuth.getInstance()
     private val _ui = MutableStateFlow(AuthUiState())
     val ui: StateFlow<AuthUiState> = _ui.asStateFlow()
@@ -28,52 +37,12 @@ class AuthViewModel : ViewModel() {
         _ui.value = _ui.value.copy(isSignedIn = signedIn)
     }
 
-    fun setEmail(email: String) {
-        Log.d(TAG, "setEmail: $email")
-        _ui.value = _ui.value.copy(email = email, error = null)
-    }
-
-    /** Call after a successful sign-in/up when you want to force the gate open (Splash will also pick up currentUser). */
-    fun markSignedIn() {
-        Log.d(TAG, "markSignedIn() called")
-        _ui.value = _ui.value.copy(isSignedIn = true)
-    }
-
     fun signOut() {
         Log.d(TAG, "signOut()")
         auth.signOut()
         _ui.value = _ui.value.copy(isSignedIn = false)
     }
 
-    // --- Email/Password: Create account ---
-    fun signUp(
-        email: String,
-        password: String,
-        onSuccess: () -> Unit,
-        onError: (String) -> Unit
-    ) {
-        Log.d(TAG, "signUp: $email")
-        _ui.value = _ui.value.copy(isSubmitting = true, error = null)
-
-        auth.createUserWithEmailAndPassword(email, password)
-            .addOnCompleteListener { task ->
-                _ui.value = _ui.value.copy(isSubmitting = false)
-                if (task.isSuccessful) {
-                    Log.d(TAG, "signUp success: uid=${task.result?.user?.uid}")
-                    _ui.value = _ui.value.copy(isSignedIn = true, error = null)
-                    // TODO(Optional): send verification email
-                    // task.result?.user?.sendEmailVerification()
-                    onSuccess()
-                } else {
-                    val msg = task.exception?.localizedMessage ?: "Sign up failed"
-                    Log.e(TAG, "signUp failed: $msg", task.exception)
-                    _ui.value = _ui.value.copy(error = msg)
-                    onError(msg)
-                }
-            }
-    }
-
-    // --- Email/Password: Sign in (for future "Already have an account?" flow) ---
     fun signIn(
         email: String,
         password: String,
@@ -99,6 +68,83 @@ class AuthViewModel : ViewModel() {
             }
     }
 
-    // Optional helper if you later gate on email verification:
-    fun isEmailVerified(): Boolean = auth.currentUser?.isEmailVerified == true
+    fun setPendingRegistration(email: String, password: String) {
+        Log.d(TAG, "setPendingRegistration: $email")
+        _ui.value = _ui.value.copy(
+            pendingRegistration = PendingRegistrationData(email, password),
+            error = null
+        )
+    }
+
+    fun clearPendingRegistration() {
+        Log.d(TAG, "clearPendingRegistration")
+        _ui.value = _ui.value.copy(pendingRegistration = null)
+    }
+
+    fun completeFullRegistration(
+        name: String,
+        phoneNumber: String,
+        context: Context,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val pendingData = _ui.value.pendingRegistration
+        if (pendingData == null) {
+            onError("No pending registration data found")
+            return
+        }
+
+        Log.d(TAG, "completeFullRegistration: ${pendingData.email}, $name, $phoneNumber")
+        _ui.value = _ui.value.copy(isSubmitting = true, error = null)
+
+        // First create Firebase account
+        auth.createUserWithEmailAndPassword(pendingData.email, pendingData.password)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    Log.d(TAG, "Firebase account created: uid=${task.result?.user?.uid}")
+                    // Now complete the full registration with server
+                    viewModelScope.launch {
+                        try {
+                            val completeRegistrationUseCase = CompleteRegistrationUseCase()
+                            val result = completeRegistrationUseCase(
+                                context = context,
+                                name = name,
+                                phoneNumber = phoneNumber
+                            )
+
+                            when (result) {
+                                is ResultModel.Ok -> {
+                                    _ui.value = _ui.value.copy(
+                                        isSubmitting = false,
+                                        isSignedIn = true,
+                                        error = null,
+                                        pendingRegistration = null
+                                    )
+                                    onSuccess()
+                                }
+                                is ResultModel.Err -> {
+                                    // Registration failed, clean up Firebase account
+                                    auth.currentUser?.delete()
+                                    val msg = "Registration failed: ${result.message}"
+                                    _ui.value = _ui.value.copy(isSubmitting = false, error = msg)
+                                    onError(msg)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Registration failed, clean up Firebase account
+                            auth.currentUser?.delete()
+                            val msg = "Registration failed: ${e.message}"
+                            Log.e(TAG, "Registration exception", e)
+                            _ui.value = _ui.value.copy(isSubmitting = false, error = msg)
+                            onError(msg)
+                        }
+                    }
+                } else {
+                    val msg = task.exception?.localizedMessage ?: "Account creation failed"
+                    Log.e(TAG, "Firebase account creation failed: $msg", task.exception)
+                    _ui.value = _ui.value.copy(isSubmitting = false, error = msg)
+                    onError(msg)
+                }
+            }
+    }
 }

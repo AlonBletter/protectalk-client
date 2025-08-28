@@ -11,6 +11,7 @@ object Routes {
 
     // Auth graph
     const val Registration = "registration"
+    const val UserProfile = "user_profile"
     const val Login = "login"
 
     // Main graph

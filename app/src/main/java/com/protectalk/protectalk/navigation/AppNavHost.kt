@@ -11,8 +11,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -26,18 +24,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.protectalk.protectalk.ui.login.LoginScreen
 import com.protectalk.protectalk.ui.registration.AuthViewModel
-
-private data class NavItem(
-    val route: String,
-    val label: String,
-    val icon: ImageVector
-)
-
-private val bottomItems = listOf(
-    NavItem(Routes.Home, "Home", Icons.Default.Home),
-    NavItem(Routes.Protection, "Protection", Icons.Default.Shield),
-    NavItem(Routes.Settings, "Settings", Icons.Default.Settings)
-)
+import com.protectalk.protectalk.ui.registration.UserProfileScreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -106,22 +93,37 @@ fun AppNavHost(navController: NavHostController) {
                     val ui = authViewModel.ui.collectAsState().value
                     RegistrationScreen(
                         onRegister = { email, password ->
-                            authViewModel.signUp(
-                                email = email,
-                                password = password,
-                                onSuccess = {
-                                    // enter Main graph and clear Auth graph
-                                    navController.navigate(Graph.Main) {
-                                        popUpTo(Graph.Auth) { inclusive = true }
-                                        launchSingleTop = true
-                                    }
-                                },
-                                onError = { /* ui.error already surfaces */ }
-                            )
+                            // Instead of creating Firebase account immediately,
+                            // just store the credentials and navigate to profile
+                            authViewModel.setPendingRegistration(email, password)
+                            navController.navigate(Routes.UserProfile) {
+                                launchSingleTop = true
+                            }
                         },
                         onNavigateToLogin = { navController.navigate(Routes.Login) },
                         serverError = ui.error,
                         isSubmittingExternal = ui.isSubmitting
+                    )
+                }
+
+                composable(Routes.UserProfile) {
+                    val ui = authViewModel.ui.collectAsState().value
+                    UserProfileScreen(
+                        onComplete = {
+                            // After profile completion, go to main app
+                            navController.navigate(Graph.Main) {
+                                popUpTo(Graph.Auth) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onBack = {
+                            // Clear pending registration when going back
+                            authViewModel.clearPendingRegistration()
+                            navController.popBackStack()
+                        },
+                        // Pass the auth state for loading/error handling
+                        isLoading = ui.isSubmitting,
+                        errorMessage = ui.error
                     )
                 }
 
@@ -133,6 +135,8 @@ fun AppNavHost(navController: NavHostController) {
                                 email = email,
                                 password = password,
                                 onSuccess = {
+                                    // For existing users, we need to register their device
+                                    // Navigate to main app and trigger device registration there
                                     navController.navigate(Graph.Main) {
                                         popUpTo(Graph.Auth) { inclusive = true }
                                         launchSingleTop = true
@@ -176,7 +180,3 @@ fun AppNavHost(navController: NavHostController) {
         }
     }
 }
-
-// helper to highlight the selected tab
-private fun NavDestination?.isRouteInHierarchy(route: String): Boolean =
-    this?.hierarchy?.any { it.route == route } == true
