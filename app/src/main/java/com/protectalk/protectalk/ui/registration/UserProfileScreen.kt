@@ -15,8 +15,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.protectalk.protectalk.domain.CompleteRegistrationUseCase
-import kotlinx.coroutines.launch
 
 @Preview(showBackground = true)
 @Composable
@@ -42,8 +40,7 @@ fun UserProfileScreen(
     var localError by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val completeRegistrationUseCase = remember { CompleteRegistrationUseCase() }
+    val authViewModel: AuthViewModel = viewModel()
 
     fun isValidPhoneNumber(phone: String): Boolean {
         // Basic phone validation - adjust regex as needed for your region
@@ -130,28 +127,22 @@ fun UserProfileScreen(
             onClick = {
                 if (isFormValid) {
                     isSubmitting = true
-                    scope.launch {
-                        try {
-                            val result = completeRegistrationUseCase(
-                                context = context,
-                                name = name.trim(),
-                                phoneNumber = phoneNumber.trim()
-                            )
+                    localError = null // Clear previous errors
 
-                            when (result) {
-                                is com.protectalk.protectalk.data.model.ResultModel.Ok -> {
-                                    onComplete()
-                                }
-                                is com.protectalk.protectalk.data.model.ResultModel.Err -> {
-                                    localError = result.message
-                                }
-                            }
-                        } catch (e: Exception) {
-                            localError = "Registration failed: ${e.message}"
-                        } finally {
+                    // Use the new complete registration flow
+                    authViewModel.completeFullRegistration(
+                        name = name.trim(),
+                        phoneNumber = phoneNumber.trim(),
+                        context = context,
+                        onSuccess = {
+                            // Registration completed successfully, navigate to main app
+                            onComplete()
+                        },
+                        onError = { error ->
+                            localError = error
                             isSubmitting = false
                         }
-                    }
+                    )
                 } else {
                     when {
                         name.trim().length < 2 -> localError = "Please enter your full name"

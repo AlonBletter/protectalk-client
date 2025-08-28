@@ -9,7 +9,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 
 interface ApiService {
-    @POST("api/devices")
+    @POST("api/device-tokens/register")
     suspend fun registerDevice(@Body body: RegisterTokenRequest): Response<Unit>
 
     @POST("api/users/complete-registration")

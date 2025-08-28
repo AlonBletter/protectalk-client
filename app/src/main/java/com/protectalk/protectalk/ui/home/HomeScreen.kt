@@ -2,11 +2,14 @@ package com.protectalk.protectalk.ui.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.protectalk.protectalk.domain.RegisterDeviceUseCase
+import kotlinx.coroutines.launch
 
 @Preview(showBackground = true)
 @Composable
@@ -17,6 +20,22 @@ private fun HomeScreen_Preview() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val registerDeviceUseCase = remember { RegisterDeviceUseCase() }
+
+    // Register device when HomeScreen is first composed (for existing users who sign in)
+    LaunchedEffect(Unit) {
+        scope.launch {
+            try {
+                registerDeviceUseCase(context)
+                // Don't need to handle the result here - it's best-effort
+            } catch (e: Exception) {
+                // Silently handle errors - device registration is not critical for app functionality
+            }
+        }
+    }
+
     Scaffold(
         topBar = { CenterAlignedTopAppBar(title = { Text("ProtecTalk") }) }
     ) { padding ->

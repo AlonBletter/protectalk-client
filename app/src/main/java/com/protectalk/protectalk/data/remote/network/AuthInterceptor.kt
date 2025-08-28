@@ -44,13 +44,10 @@ class AuthInterceptor : Interceptor {
 
         // Check if we have a cached token that's still valid
         if (cachedToken != null && currentTime < (tokenExpiryTime - REFRESH_BUFFER_MS)) {
-            Log.d(TAG, "Using cached ID token (expires in ${(tokenExpiryTime - currentTime) / 1000}s)")
             return cachedToken
         }
 
         // Need to fetch a new token
-        Log.d(TAG, "Fetching fresh ID token (cached token ${if (cachedToken == null) "missing" else "expired"})")
-
         return try {
             val user = FirebaseAuth.getInstance().currentUser
             if (user != null) {
@@ -63,7 +60,6 @@ class AuthInterceptor : Interceptor {
                     cachedToken = token
                     tokenExpiryTime = expirationTimestamp * 1000L // Convert to milliseconds
 
-                    Log.d(TAG, "Cached new ID token (expires at ${java.util.Date(tokenExpiryTime)})")
                     token
                 }
             } else {
