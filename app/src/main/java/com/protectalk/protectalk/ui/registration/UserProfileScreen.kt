@@ -23,7 +23,8 @@ private fun UserProfileScreen_Preview() {
         onComplete = {},
         onBack = {},
         isLoading = false,
-        errorMessage = null
+        errorMessage = null,
+        authViewModel = viewModel()
     )
 }
 
@@ -32,7 +33,8 @@ fun UserProfileScreen(
     onComplete: () -> Unit,
     onBack: () -> Unit,
     isLoading: Boolean = false,
-    errorMessage: String? = null
+    errorMessage: String? = null,
+    authViewModel: AuthViewModel
 ) {
     var name by rememberSaveable { mutableStateOf("") }
     var phoneNumber by rememberSaveable { mutableStateOf("") }
@@ -40,7 +42,6 @@ fun UserProfileScreen(
     var localError by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
-    val authViewModel: AuthViewModel = viewModel()
 
     fun isValidPhoneNumber(phone: String): Boolean {
         // Basic phone validation - adjust regex as needed for your region
