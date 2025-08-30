@@ -3,6 +3,7 @@ package com.protectalk.protectalk.data.remote.network
 import com.protectalk.protectalk.data.model.dto.CompleteRegistrationRequest
 import com.protectalk.protectalk.data.model.dto.RegisterTokenRequest
 import com.protectalk.protectalk.data.model.dto.TriggerAlertRequest
+import com.protectalk.protectalk.data.model.dto.ContactRequestDto
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -17,6 +18,9 @@ interface ApiService {
 
     @POST("api/v1/alerts")
     suspend fun triggerAlert(@Body body: TriggerAlertRequest): Response<Unit>
+
+    @POST("api/users/contact-request")
+    suspend fun sendContactRequest(@Body body: ContactRequestDto): Response<Unit>
 
     // Protection flows (stubs for later phases)
     @POST("api/v1/links/invite")

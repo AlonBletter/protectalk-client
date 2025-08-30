@@ -1,5 +1,7 @@
 package com.protectalk.protectalk.data.repo
 
+import android.util.Log
+import com.protectalk.protectalk.data.model.dto.ContactRequestDto
 import com.protectalk.protectalk.data.remote.network.ApiService
 import com.protectalk.protectalk.data.model.ResultModel
 
@@ -39,5 +41,25 @@ class ProtectionRepository(private val api: ApiService) {
         }
     } catch (t: Throwable) {
         ResultModel.Err("Failed to load links", t)
+    }
+
+    suspend fun sendContactRequest(contactRequest: ContactRequestDto): ResultModel<Unit> = try {
+        Log.d("ProtectionRepository", "Sending contact request to server...")
+        Log.d("ProtectionRepository", "Request: $contactRequest")
+
+        val response = api.sendContactRequest(contactRequest)
+
+        if (response.isSuccessful) {
+            Log.d("ProtectionRepository", "Contact request sent successfully")
+            ResultModel.Ok(Unit)
+        } else {
+            val errorBody = response.errorBody()?.string()
+            val errorMsg = "Failed to send contact request: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}"
+            Log.e("ProtectionRepository", errorMsg)
+            ResultModel.Err(errorMsg)
+        }
+    } catch (t: Throwable) {
+        Log.e("ProtectionRepository", "Exception during contact request", t)
+        ResultModel.Err("Failed to send contact request", t)
     }
 }
