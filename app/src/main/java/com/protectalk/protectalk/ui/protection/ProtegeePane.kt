@@ -3,8 +3,12 @@ package com.protectalk.protectalk.ui.protection
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
@@ -16,67 +20,131 @@ fun ProtegeePane(
     onRemoveTrusted: (LinkContact) -> Unit,
     onOpenAddDialog: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize()) {
+    Column(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        // Add button
         Button(
             onClick = onOpenAddDialog,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Add Trusted Contact")
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Ask to be protected")
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { SectionHeader("Outgoing requests") }
-            if (outgoing.isEmpty()) {
-                item { Hint("No outgoing requests yet.") }
-            } else {
-                items(outgoing, key = { it.id }) { req ->
-                    OutlinedCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("${req.otherName} • ${req.otherPhone}", style = MaterialTheme.typography.bodyLarge)
-                            Spacer(Modifier.height(4.dp))
-                            Text("Relation: ${req.relation.name}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { onCancelOutgoing(req) }) {
-                                    Text("Cancel")
-                                }
+            // Outgoing requests section
+            if (outgoing.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Pending Requests",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                items(outgoing) { request ->
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = request.otherName,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = request.otherPhone,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Relationship: ${request.relation}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            TextButton(onClick = { onCancelOutgoing(request) }) {
+                                Text("Cancel")
                             }
                         }
                     }
                 }
             }
 
-            item { Spacer(Modifier.height(8.dp)) }
-            item { SectionHeader("Your trusted contacts") }
-            if (trustedContacts.isEmpty()) {
-                item { Hint("You have no trusted contacts yet.") }
-            } else {
-                items(trustedContacts, key = { it.id }) { c ->
-                    OutlinedCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("${c.name} • ${c.phone}", style = MaterialTheme.typography.bodyLarge)
-                            Spacer(Modifier.height(4.dp))
-                            Text("Relation: ${c.relation.name}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { onRemoveTrusted(c) }) { Text("Remove") }
+            // Trusted contacts section
+            if (trustedContacts.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "My Trusted Contacts",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                items(trustedContacts) { contact ->
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = contact.name,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = contact.phone,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Relationship: ${contact.relation}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            IconButton(onClick = { onRemoveTrusted(contact) }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Remove contact",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
                             }
                         }
+                    }
+                }
+            }
+
+            // Empty state
+            if (outgoing.isEmpty() && trustedContacts.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No trusted contacts yet. Ask someone to protect you!",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
         }
     }
-}
-
-@Composable private fun SectionHeader(text: String) {
-    Text(text, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-}
-@Composable private fun Hint(text: String) {
-    Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 2.dp))
 }

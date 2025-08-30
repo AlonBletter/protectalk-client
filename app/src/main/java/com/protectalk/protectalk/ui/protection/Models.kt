@@ -1,6 +1,8 @@
 package com.protectalk.protectalk.ui.protection
 
 import com.protectalk.protectalk.data.model.dto.ContactType
+import com.protectalk.protectalk.data.model.dto.LinkedContactDto
+import com.protectalk.protectalk.data.model.dto.PendingContactRequestDto
 
 // UI-only models (replace with real entities later)
 enum class Relation {
@@ -39,3 +41,32 @@ enum class DialogRole {
 }
 
 enum class ProtectionTab { Protegee, Trusted }
+
+// Mapper functions to convert server DTOs to UI models
+fun LinkedContactDto.toUIModel(): LinkContact {
+    val relation = when (relationship.uppercase()) {
+        "FAMILY" -> Relation.Family
+        "FRIEND" -> Relation.Friend
+        else -> Relation.Other
+    }
+    return LinkContact(
+        id = phoneNumber, // Use phone as ID since server doesn't provide separate ID
+        name = name,
+        phone = phoneNumber,
+        relation = relation
+    )
+}
+
+fun PendingContactRequestDto.toUIModel(): PendingRequest {
+    val relation = when (relationship.uppercase()) {
+        "FAMILY" -> Relation.Family
+        "FRIEND" -> Relation.Friend
+        else -> Relation.Other
+    }
+    return PendingRequest(
+        id = "${requesterName}_${targetPhoneNumber}_${System.currentTimeMillis()}", // Generate ID from data
+        otherName = requesterName,
+        otherPhone = targetPhoneNumber,
+        relation = relation
+    )
+}

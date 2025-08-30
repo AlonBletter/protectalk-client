@@ -2,6 +2,7 @@ package com.protectalk.protectalk.data.repo
 
 import android.util.Log
 import com.protectalk.protectalk.data.model.dto.ContactRequestDto
+import com.protectalk.protectalk.data.model.dto.UserProfileResponse
 import com.protectalk.protectalk.data.remote.network.ApiService
 import com.protectalk.protectalk.data.model.ResultModel
 
@@ -61,5 +62,30 @@ class ProtectionRepository(private val api: ApiService) {
     } catch (t: Throwable) {
         Log.e("ProtectionRepository", "Exception during contact request", t)
         ResultModel.Err("Failed to send contact request", t)
+    }
+
+    suspend fun getUserProfile(): ResultModel<UserProfileResponse> = try {
+        Log.d("ProtectionRepository", "Fetching user profile from server...")
+
+        val response = api.getUserProfile()
+
+        if (response.isSuccessful) {
+            val profile = response.body()
+            if (profile != null) {
+                Log.d("ProtectionRepository", "User profile fetched successfully")
+                ResultModel.Ok(profile)
+            } else {
+                Log.e("ProtectionRepository", "Profile response body is null")
+                ResultModel.Err("Empty profile response")
+            }
+        } else {
+            val errorBody = response.errorBody()?.string()
+            val errorMsg = "Failed to fetch profile: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}"
+            Log.e("ProtectionRepository", errorMsg)
+            ResultModel.Err(errorMsg)
+        }
+    } catch (t: Throwable) {
+        Log.e("ProtectionRepository", "Exception during profile fetch", t)
+        ResultModel.Err("Failed to fetch profile", t)
     }
 }

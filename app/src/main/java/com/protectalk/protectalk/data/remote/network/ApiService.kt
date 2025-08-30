@@ -4,6 +4,7 @@ import com.protectalk.protectalk.data.model.dto.CompleteRegistrationRequest
 import com.protectalk.protectalk.data.model.dto.RegisterTokenRequest
 import com.protectalk.protectalk.data.model.dto.TriggerAlertRequest
 import com.protectalk.protectalk.data.model.dto.ContactRequestDto
+import com.protectalk.protectalk.data.model.dto.UserProfileResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -21,6 +22,9 @@ interface ApiService {
 
     @POST("api/users/contact-request")
     suspend fun sendContactRequest(@Body body: ContactRequestDto): Response<Unit>
+
+    @GET("api/users/profile")
+    suspend fun getUserProfile(): Response<UserProfileResponse>
 
     // Protection flows (stubs for later phases)
     @POST("api/v1/links/invite")

@@ -54,7 +54,10 @@ dependencies {
 
     implementation("androidx.activity:activity-compose:1.8.0")
     implementation("androidx.compose.ui:ui:1.5.3")
-    implementation("androidx.compose.material3:material3:1.1.2")
+    implementation("androidx.compose.material3:material3:1.2.1") // Updated for pulltorefresh support
+
+    // Lifecycle for foreground/background detection
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
 
     // Retrofit + Moshi
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
