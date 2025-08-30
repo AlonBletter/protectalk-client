@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.protectalk.protectalk.ui.protection
 
@@ -80,7 +80,7 @@ fun AddProtectionDialog(
                         expanded = relationMenuOpen && !isLoading,
                         onDismissRequest = { relationMenuOpen = false }
                     ) {
-                        Relation.values().forEach { r ->
+                        Relation.entries.forEach { r ->
                             DropdownMenuItem(
                                 text = { Text(r.name) },
                                 onClick = {

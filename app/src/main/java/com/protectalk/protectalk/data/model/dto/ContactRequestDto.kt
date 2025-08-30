@@ -11,6 +11,3 @@ enum class ContactType {
     PROTEGEE,    // I want this person to protect me
     TRUSTED      // I want to protect this person
 }
-
-class ProtectionInviteRequest {
-}
