@@ -1,16 +1,20 @@
 package com.protectalk.protectalk.data.model.dto
 
+import com.squareup.moshi.JsonClass
+
+@JsonClass(generateAdapter = true)
 data class UserProfileResponse(
     val firebaseUid: String,
     val name: String,
     val phoneNumber: String,
     val userType: String? = null,
-    val createdAt: String? = null, // ISO timestamp string
+    val createdAt: String? = null,
     val linkedContacts: List<LinkedContactDto>? = null,
     val pendingReceivedRequests: List<PendingContactRequestDto>? = null,
     val pendingSentRequests: List<PendingContactRequestDto>? = null
 )
 
+@JsonClass(generateAdapter = true)
 data class LinkedContactDto(
     val phoneNumber: String,
     val name: String,
@@ -18,11 +22,14 @@ data class LinkedContactDto(
     val contactType: String // "TRUSTED_CONTACT" or "PROTEGEE"
 )
 
+@JsonClass(generateAdapter = true)
 data class PendingContactRequestDto(
+    val id: String? = null,
     val requesterName: String,
     val targetPhoneNumber: String,
     val relationship: String,
     val contactType: String,
     val status: String,
-    val createdAt: String? = null // ISO timestamp string
+    val createdAt: java.time.Instant? = null,
+    val isIncoming: Boolean // true if this user is the target, false if requester
 )

@@ -5,10 +5,15 @@ import com.protectalk.protectalk.data.model.dto.ContactRequestDto
 import com.protectalk.protectalk.data.model.dto.UserProfileResponse
 import com.protectalk.protectalk.data.remote.network.ApiService
 import com.protectalk.protectalk.data.model.ResultModel
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class ProtectionRepository(private val api: ApiService) {
+@Singleton
+class ProtectionRepository @Inject constructor(
+    private val apiService: ApiService
+) {
     suspend fun sendInvite(body: Map<String, Any>): ResultModel<Unit> = try {
-        val response = api.sendInvite(body)
+        val response = apiService.sendInvite(body)
         if (response.isSuccessful) {
             ResultModel.Ok(Unit)
         } else {
@@ -20,7 +25,7 @@ class ProtectionRepository(private val api: ApiService) {
     }
 
     suspend fun respondInvite(body: Map<String, Any>): ResultModel<Unit> = try {
-        val response = api.respondInvite(body)
+        val response = apiService.respondInvite(body)
         if (response.isSuccessful) {
             ResultModel.Ok(Unit)
         } else {
@@ -32,7 +37,7 @@ class ProtectionRepository(private val api: ApiService) {
     }
 
     suspend fun getLinks(): ResultModel<Map<String, Any>> = try {
-        val response = api.getLinks()
+        val response = apiService.getLinks()
         if (response.isSuccessful) {
             val data = response.body() ?: emptyMap()
             ResultModel.Ok(data)
@@ -48,7 +53,7 @@ class ProtectionRepository(private val api: ApiService) {
         Log.d("ProtectionRepository", "Sending contact request to server...")
         Log.d("ProtectionRepository", "Request: $contactRequest")
 
-        val response = api.sendContactRequest(contactRequest)
+        val response = apiService.sendContactRequest(contactRequest)
 
         if (response.isSuccessful) {
             Log.d("ProtectionRepository", "Contact request sent successfully")
@@ -67,7 +72,7 @@ class ProtectionRepository(private val api: ApiService) {
     suspend fun getUserProfile(): ResultModel<UserProfileResponse> = try {
         Log.d("ProtectionRepository", "Fetching user profile from server...")
 
-        val response = api.getUserProfile()
+        val response = apiService.getUserProfile()
 
         if (response.isSuccessful) {
             val profile = response.body()

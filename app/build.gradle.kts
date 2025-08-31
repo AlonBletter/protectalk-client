@@ -10,7 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        buildConfigField("String", "BASE_URL", "\"http://192.168.7.18:8080/\"")
+        buildConfigField("String", "BASE_URL", "\"http://192.168.1.132:8080/\"")
         applicationId = "com.protectalk.protectalk"
         minSdk = 24
         targetSdk = 36
@@ -54,7 +54,7 @@ dependencies {
 
     implementation("androidx.activity:activity-compose:1.8.0")
     implementation("androidx.compose.ui:ui:1.5.3")
-    implementation("androidx.compose.material3:material3:1.2.1") // Updated for pulltorefresh support
+    implementation("androidx.compose.material3:material3:1.2.1") // This version includes pull-to-refresh
 
     // Lifecycle for foreground/background detection
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
@@ -84,6 +84,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.foundation)
+    implementation("com.google.accompanist:accompanist-swiperefresh:0.32.0") // Accompanist SwipeRefresh - stable pull-to-refresh solution
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

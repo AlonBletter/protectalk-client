@@ -3,23 +3,56 @@
 package com.protectalk.protectalk.ui.protection
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.delay
 
 @Composable
 fun ProtectionScreen(
     viewModel: ProtectionViewModel = viewModel()
 ) {
     val ui = viewModel.ui.collectAsState().value
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var selectedTab by rememberSaveable { mutableStateOf(ProtectionTab.Protegee) }
     var showDialog by rememberSaveable { mutableStateOf(false) }
     var dialogRole by rememberSaveable { mutableStateOf(DialogRole.ProtegeeAsks) }
+    var isAppInForeground by remember { mutableStateOf(true) }
+
+    // Observe lifecycle to track foreground/background state
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> isAppInForeground = true
+                Lifecycle.Event.ON_PAUSE -> isAppInForeground = false
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Automatic refresh every 30 seconds when app is in foreground
+    LaunchedEffect(isAppInForeground) {
+        while (isAppInForeground) {
+            delay(30_000) // 30 seconds
+            if (isAppInForeground && !ui.isRefreshing) {
+                viewModel.refresh()
+            }
+        }
+    }
 
     // Clear error when dialog is dismissed
     LaunchedEffect(showDialog) {
@@ -29,10 +62,39 @@ fun ProtectionScreen(
     }
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text("Protection") }) }
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("Protection") },
+                actions = {
+                    // Manual refresh button
+                    IconButton(
+                        onClick = {
+                            if (isAppInForeground && !ui.isRefreshing) {
+                                viewModel.refresh()
+                            }
+                        }
+                    ) {
+                        if (ui.isRefreshing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = "Refresh"
+                            )
+                        }
+                    }
+                }
+            )
+        }
     ) { padding ->
         Column(
-            Modifier.padding(padding).fillMaxSize().padding(16.dp)
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
             val tabs = listOf(
                 ProtectionTab.Protegee to "Protegee",
@@ -96,6 +158,7 @@ fun ProtectionScreen(
             }
         }
 
+        // Dialog and other components outside the main Column
         if (showDialog) {
             AddProtectionDialog(
                 role = dialogRole,
@@ -106,8 +169,6 @@ fun ProtectionScreen(
                         DialogRole.ProtegeeAsks -> viewModel.sendRequest(name, phone, relation)
                         DialogRole.TrustedOffers -> viewModel.offerProtection(name, phone, relation)
                     }
-                    // Don't close dialog immediately - let the API call complete
-                    // Dialog will be closed by the success case or stay open for error handling
                 }
             )
         }
@@ -115,7 +176,6 @@ fun ProtectionScreen(
         // Auto-close dialog on successful submission
         LaunchedEffect(ui.isLoading, ui.error) {
             if (!ui.isLoading && ui.error == null && showDialog) {
-                // Only close if we were loading (indicating a successful API call)
                 showDialog = false
             }
         }
