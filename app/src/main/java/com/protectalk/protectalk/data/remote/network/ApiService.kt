@@ -9,6 +9,7 @@ import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 interface ApiService {
     @POST("api/device-tokens/register")
@@ -32,6 +33,12 @@ interface ApiService {
 
     @POST("api/v1/links/respond")
     suspend fun respondInvite(@Body body: Map<String, Any>): Response<Unit>
+
+    @POST("api/users/requests/{requestId}/approve")
+    suspend fun approveRequest(@Path("requestId") requestId: String): Response<Unit>
+
+    @POST("api/users/requests/{requestId}/deny")
+    suspend fun denyRequest(@Path("requestId") requestId: String): Response<Unit>
 
     @GET("api/v1/links")
     suspend fun getLinks(): Response<Map<String, Any>> // TODO: replace with DTOs

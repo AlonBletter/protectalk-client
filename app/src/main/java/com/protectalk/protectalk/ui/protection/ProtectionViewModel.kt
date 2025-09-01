@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.protectalk.protectalk.data.model.ResultModel
 import com.protectalk.protectalk.domain.SendContactRequestUseCase
-import com.protectalk.protectalk.data.repo.ProtectionRepository
+import com.protectalk.protectalk.domain.GetUserProfileUseCase
+import com.protectalk.protectalk.domain.ApproveContactRequestUseCase
+import com.protectalk.protectalk.domain.DenyContactRequestUseCase
 import com.protectalk.protectalk.data.remote.network.ApiClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,8 +16,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class ProtectionUiState(
-    val outgoing: List<PendingRequest> = emptyList(),   // protegee -> trusted (pending)
-    val incoming: List<PendingRequest> = emptyList(),   // trusted <- protegee (pending)
+    val outgoing: List<PendingRequest> = emptyList(),   // Requests I sent
+    val incomingProtectionRequests: List<PendingRequest> = emptyList(), // People asking for my protection
+    val incomingProtectionOffers: List<PendingRequest> = emptyList(),   // People offering to protect me
     val trusted:  List<LinkContact>   = emptyList(),    // my trusted contacts
     val protegees: List<LinkContact>  = emptyList(),    // people I protect
     val isLoading: Boolean = false,
@@ -26,13 +29,16 @@ data class ProtectionUiState(
 class ProtectionViewModel : ViewModel() {
 
     private val sendContactRequestUseCase = SendContactRequestUseCase()
-    private val protectionRepository = ProtectionRepository(ApiClient.apiService)
+    private val getUserProfileUseCase = GetUserProfileUseCase() // Use the existing use case instead of repository directly
+    private val approveContactRequestUseCase = ApproveContactRequestUseCase()
+    private val denyContactRequestUseCase = DenyContactRequestUseCase()
 
     private val _ui = MutableStateFlow(
         ProtectionUiState(
             // Remove mock data - will be loaded from server
             outgoing = emptyList(),
-            incoming = emptyList(),
+            incomingProtectionRequests = emptyList(),
+            incomingProtectionOffers = emptyList(),
             trusted = emptyList(),
             protegees = emptyList(),
         )
@@ -61,7 +67,7 @@ class ProtectionViewModel : ViewModel() {
                 // Add to local state as pending
                 val id = System.currentTimeMillis().toString()
                 _ui.value = _ui.value.copy(
-                    outgoing = _ui.value.outgoing + PendingRequest(id, name, phone, relation),
+                    outgoing = _ui.value.outgoing + PendingRequest(id, name, phone, relation, "TRUSTED_CONTACT"),
                     isLoading = false,
                     error = null
                 )
@@ -90,10 +96,10 @@ class ProtectionViewModel : ViewModel() {
         when (result) {
             is ResultModel.Ok -> {
                 Log.d("ProtectionViewModel", "Protection offer sent successfully")
-                // Add to local state as pending
+                // Add to local state as pending - this should be OUTGOING, not incoming
                 val id = System.currentTimeMillis().toString()
                 _ui.value = _ui.value.copy(
-                    incoming = _ui.value.incoming + PendingRequest(id, name, phone, relation),
+                    outgoing = _ui.value.outgoing + PendingRequest(id, name, phone, relation, "PROTEGEE"),
                     isLoading = false,
                     error = null
                 )
@@ -125,23 +131,95 @@ class ProtectionViewModel : ViewModel() {
     }
 
     fun accept(req: PendingRequest) = viewModelScope.launch {
-        _ui.value = _ui.value.copy(
-            incoming = _ui.value.incoming.filterNot { it.id == req.id },
-            protegees = _ui.value.protegees + LinkContact(
-                "prot_${req.id}",
-                req.otherName,
-                req.otherPhone,
-                req.relation
-            )
-        )
-        // TODO(DB): mark accepted & create relationship
-        // TODO(FCM): notify requester
+        _ui.value = _ui.value.copy(isLoading = true, error = null)
+
+        Log.d("ProtectionViewModel", "Approving contact request with ID: ${req.id}")
+
+        val result = approveContactRequestUseCase(req.id)
+
+        when (result) {
+            is ResultModel.Ok -> {
+                Log.d("ProtectionViewModel", "Contact request approved successfully")
+                // Update UI state based on request type
+                when (req.contactType) {
+                    "TRUSTED_CONTACT", "TRUSTED" -> {
+                        // Someone asked for my protection - they become my protegee
+                        _ui.value = _ui.value.copy(
+                            incomingProtectionRequests = _ui.value.incomingProtectionRequests.filterNot { it.id == req.id },
+                            protegees = _ui.value.protegees + LinkContact(
+                                "prot_${req.id}",
+                                req.otherName,
+                                req.otherPhone,
+                                req.relation
+                            ),
+                            isLoading = false,
+                            error = null
+                        )
+                    }
+                    "PROTEGEE" -> {
+                        // Someone offered to protect me - they become my trusted contact
+                        _ui.value = _ui.value.copy(
+                            incomingProtectionOffers = _ui.value.incomingProtectionOffers.filterNot { it.id == req.id },
+                            trusted = _ui.value.trusted + LinkContact(
+                                "trusted_${req.id}",
+                                req.otherName,
+                                req.otherPhone,
+                                req.relation
+                            ),
+                            isLoading = false,
+                            error = null
+                        )
+                    }
+                }
+            }
+
+            is ResultModel.Err -> {
+                Log.e("ProtectionViewModel", "Failed to approve contact request: ${result.message}")
+                _ui.value = _ui.value.copy(
+                    isLoading = false,
+                    error = "Failed to approve request: ${result.message}"
+                )
+            }
+        }
     }
 
     fun decline(req: PendingRequest) = viewModelScope.launch {
-        _ui.value = _ui.value.copy(incoming = _ui.value.incoming.filterNot { it.id == req.id })
-        // TODO(DB): mark declined
-        // TODO(FCM): notify requester
+        _ui.value = _ui.value.copy(isLoading = true, error = null)
+
+        Log.d("ProtectionViewModel", "Denying contact request with ID: ${req.id}")
+
+        val result = denyContactRequestUseCase(req.id)
+
+        when (result) {
+            is ResultModel.Ok -> {
+                Log.d("ProtectionViewModel", "Contact request denied successfully")
+                // Update UI state: remove from appropriate incoming list
+                when (req.contactType) {
+                    "TRUSTED_CONTACT", "TRUSTED" -> {
+                        _ui.value = _ui.value.copy(
+                            incomingProtectionRequests = _ui.value.incomingProtectionRequests.filterNot { it.id == req.id },
+                            isLoading = false,
+                            error = null
+                        )
+                    }
+                    "PROTEGEE" -> {
+                        _ui.value = _ui.value.copy(
+                            incomingProtectionOffers = _ui.value.incomingProtectionOffers.filterNot { it.id == req.id },
+                            isLoading = false,
+                            error = null
+                        )
+                    }
+                }
+            }
+
+            is ResultModel.Err -> {
+                Log.e("ProtectionViewModel", "Failed to deny contact request: ${result.message}")
+                _ui.value = _ui.value.copy(
+                    isLoading = false,
+                    error = "Failed to deny request: ${result.message}"
+                )
+            }
+        }
     }
 
     fun removeProtegee(c: LinkContact) = viewModelScope.launch {
@@ -154,33 +232,39 @@ class ProtectionViewModel : ViewModel() {
     fun refresh() = viewModelScope.launch {
         _ui.value = _ui.value.copy(isRefreshing = true, error = null)
         try {
-            Log.d("ProtectionViewModel", "Refreshing data from server...")
+            Log.d("ProtectionViewModel", "Refreshing data from server using GetUserProfileUseCase...")
 
-            // Fetch user profile from server
-            val result = protectionRepository.getUserProfile()
+            // Use the existing use case instead of calling repository directly
+            val result = getUserProfileUseCase()
 
             when (result) {
                 is ResultModel.Ok -> {
                     val profile = result.data
-                    Log.d("ProtectionViewModel", "Profile fetched successfully")
+                    Log.d("ProtectionViewModel", "Profile fetched successfully via use case")
 
-                    // Map server data to UI models
+                    // Map server data to UI models and separate by contact type
                     val outgoingRequests = profile.pendingSentRequests?.map { it.toUIModel() } ?: emptyList()
-                    val incomingRequests = profile.pendingReceivedRequests?.map { it.toUIModel() } ?: emptyList()
+                    val allIncomingRequests = profile.pendingReceivedRequests?.map { it.toUIModel() } ?: emptyList()
+
+                    // Separate incoming requests by type
+                    val protectionRequests = allIncomingRequests.filter { it.contactType == "TRUSTED_CONTACT" || it.contactType == "TRUSTED" }
+                    val protectionOffers = allIncomingRequests.filter { it.contactType == "PROTEGEE" }
+
                     val trustedContacts = profile.linkedContacts?.filter { it.contactType == "TRUSTED_CONTACT" }?.map { it.toUIModel() } ?: emptyList()
                     val protegeeContacts = profile.linkedContacts?.filter { it.contactType == "PROTEGEE" }?.map { it.toUIModel() } ?: emptyList()
 
-                    // Update UI state with real server data
+                    // Update UI state with properly separated data
                     _ui.value = _ui.value.copy(
                         outgoing = outgoingRequests,
-                        incoming = incomingRequests,
+                        incomingProtectionRequests = protectionRequests, // People asking for my protection
+                        incomingProtectionOffers = protectionOffers,     // People offering to protect me
                         trusted = trustedContacts,
                         protegees = protegeeContacts,
                         isRefreshing = false,
                         error = null
                     )
 
-                    Log.d("ProtectionViewModel", "UI updated - Outgoing: ${outgoingRequests.size}, Incoming: ${incomingRequests.size}, Trusted: ${trustedContacts.size}, Protegees: ${protegeeContacts.size}")
+                    Log.d("ProtectionViewModel", "UI updated - Outgoing: ${outgoingRequests.size}, Protection Requests: ${protectionRequests.size}, Protection Offers: ${protectionOffers.size}, Trusted: ${trustedContacts.size}, Protegees: ${protegeeContacts.size}")
                 }
 
                 is ResultModel.Err -> {

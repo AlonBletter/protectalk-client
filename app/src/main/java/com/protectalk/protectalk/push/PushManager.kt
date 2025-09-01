@@ -71,6 +71,10 @@ object PushManager {
         if (oldToken != null && oldToken != token) {
             Log.i(TAG, "FCM token has changed")
         }
-        // TODO: enqueue upload if user is signed in
+
+        Log.d(TAG, "FCM token cached: ${token.take(10)}...")
+
+        // Token is now cached and will be uploaded by the WorkManager
+        // The PushService handles enqueuing the upload work when user is signed in
     }
 }

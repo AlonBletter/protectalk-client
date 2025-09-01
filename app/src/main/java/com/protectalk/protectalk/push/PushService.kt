@@ -8,10 +8,15 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.protectalk.protectalk.MainActivity
 import com.protectalk.protectalk.R
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.protectalk.protectalk.push.FcmTokenUploadWorker
 
 class PushService : FirebaseMessagingService() {
 
@@ -25,7 +30,28 @@ class PushService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         Log.d(TAG, "New FCM token received")
         PushManager.onNewFcmToken(token)
-        // TODO: Optionally enqueue background upload (WorkManager) if signed in
+
+        // Enqueue background upload (WorkManager) if signed in
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        if (currentUser != null) {
+            Log.d(TAG, "User is signed in, enqueuing FCM token upload work")
+            enqueueTokenUploadWork(token)
+        } else {
+            Log.d(TAG, "No signed-in user, FCM token will be uploaded on next sign-in")
+        }
+    }
+
+    private fun enqueueTokenUploadWork(token: String) {
+        val inputData = Data.Builder()
+            .putString(FcmTokenUploadWorker.KEY_FCM_TOKEN, token)
+            .build()
+
+        val uploadWork = OneTimeWorkRequestBuilder<FcmTokenUploadWorker>()
+            .setInputData(inputData)
+            .build()
+
+        WorkManager.getInstance(this).enqueue(uploadWork)
+        Log.d(TAG, "FCM token upload work enqueued")
     }
 
     override fun onMessageReceived(message: RemoteMessage) {
@@ -42,7 +68,7 @@ class PushService : FirebaseMessagingService() {
 
         // Handle different types of messages based on server notification types
         when (message.data["type"]) {
-            "contact_request" -> handleContactRequest(message)
+            "contact_request_received" -> handleContactRequestReceived(message)
             "contact_request_approved" -> handleContactRequestApproved(message)
             "contact_request_denied" -> handleContactRequestDenied(message)
             "protection_alert" -> handleProtectionAlert(message)
@@ -51,8 +77,8 @@ class PushService : FirebaseMessagingService() {
         }
     }
 
-    private fun handleContactRequest(message: RemoteMessage) {
-        Log.d(TAG, "Handling contact request notification")
+    private fun handleContactRequestReceived(message: RemoteMessage) {
+        Log.d(TAG, "Handling contact request received notification")
 
         val senderName = message.data["senderName"] ?: "Someone"
         val requestType = message.data["contactType"] ?: "TRUSTED"

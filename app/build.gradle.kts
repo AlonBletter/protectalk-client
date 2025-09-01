@@ -92,4 +92,7 @@ dependencies {
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // WorkManager for background token upload
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 }

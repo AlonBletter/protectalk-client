@@ -30,6 +30,5 @@ data class PendingContactRequestDto(
     val relationship: String,
     val contactType: String,
     val status: String,
-    val createdAt: java.time.Instant? = null,
-    val isIncoming: Boolean // true if this user is the target, false if requester
+    val createdAt: String? = null, // Changed back to String for JSON compatibility
 )

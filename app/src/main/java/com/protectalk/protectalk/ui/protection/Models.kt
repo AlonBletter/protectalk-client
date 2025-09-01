@@ -20,7 +20,8 @@ data class PendingRequest(
     val id: String,
     val otherName: String,
     val otherPhone: String,
-    val relation: Relation
+    val relation: Relation,
+    val contactType: String // "TRUSTED_CONTACT" or "PROTEGEE"
 )
 
 data class LinkContact(
@@ -63,10 +64,18 @@ fun PendingContactRequestDto.toUIModel(): PendingRequest {
         "FRIEND" -> Relation.Friend
         else -> Relation.Other
     }
+
+    // The server should always provide an ID for pending requests
+    val requestId = id ?: run {
+        android.util.Log.w("Models", "Server didn't provide ID for pending request from $requesterName, this may cause approve/deny to fail")
+        "${requesterName}_${targetPhoneNumber}_${System.currentTimeMillis()}" // Fallback only for safety
+    }
+
     return PendingRequest(
-        id = "${requesterName}_${targetPhoneNumber}_${System.currentTimeMillis()}", // Generate ID from data
+        id = requestId,
         otherName = requesterName,
         otherPhone = targetPhoneNumber,
-        relation = relation
+        relation = relation,
+        contactType = contactType // Use the actual contactType from server
     )
 }

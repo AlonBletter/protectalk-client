@@ -93,4 +93,28 @@ class ProtectionRepository @Inject constructor(
         Log.e("ProtectionRepository", "Exception during profile fetch", t)
         ResultModel.Err("Failed to fetch profile", t)
     }
+
+    suspend fun approveRequest(requestId: String): ResultModel<Unit> = try {
+        val response = apiService.approveRequest(requestId)
+        if (response.isSuccessful) {
+            ResultModel.Ok(Unit)
+        } else {
+            val errorBody = response.errorBody()?.string()
+            ResultModel.Err("Failed to approve request: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
+        }
+    } catch (t: Throwable) {
+        ResultModel.Err("Failed to approve request", t)
+    }
+
+    suspend fun denyRequest(requestId: String): ResultModel<Unit> = try {
+        val response = apiService.denyRequest(requestId)
+        if (response.isSuccessful) {
+            ResultModel.Ok(Unit)
+        } else {
+            val errorBody = response.errorBody()?.string()
+            ResultModel.Err("Failed to deny request: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
+        }
+    } catch (t: Throwable) {
+        ResultModel.Err("Failed to deny request", t)
+    }
 }

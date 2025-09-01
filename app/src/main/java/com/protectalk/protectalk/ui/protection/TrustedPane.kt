@@ -16,24 +16,26 @@ import androidx.compose.ui.unit.dp
 
 @Composable
 fun TrustedPane(
-    incoming: List<PendingRequest>,
-    protegees: List<LinkContact>,
+    incoming: List<PendingRequest>, // People offering to protect me
+    outgoing: List<PendingRequest>, // Protection requests I sent
+    trustedContacts: List<LinkContact>, // My current trusted contacts
     onAccept: (PendingRequest) -> Unit,
     onDecline: (PendingRequest) -> Unit,
-    onRemoveProtegee: (LinkContact) -> Unit,
+    onCancelOutgoing: (PendingRequest) -> Unit,
+    onRemoveTrusted: (LinkContact) -> Unit,
     onOpenAddDialog: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxSize()
     ) {
-        // Add button
+        // Add button - Ask for protection
         Button(
             onClick = onOpenAddDialog,
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Offer to protect someone")
+            Text("Ask for protection")
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -41,11 +43,11 @@ fun TrustedPane(
         LazyColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Incoming requests section
+            // Incoming protection offers section
             if (incoming.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Requests to Protect",
+                        text = "Protection Offers",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
@@ -58,7 +60,7 @@ fun TrustedPane(
                             modifier = Modifier.padding(16.dp)
                         ) {
                             Text(
-                                text = "${request.otherName} wants your protection",
+                                text = "${request.otherName} offered to protect you",
                                 style = MaterialTheme.typography.titleMedium
                             )
                             Text(
@@ -90,16 +92,16 @@ fun TrustedPane(
                 }
             }
 
-            // Protegees section
-            if (protegees.isNotEmpty()) {
+            // Outgoing protection requests section
+            if (outgoing.isNotEmpty()) {
                 item {
                     Text(
-                        text = "People I Protect",
+                        text = "Pending Protection Requests",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                 }
-                items(protegees) { protegee ->
+                items(outgoing) { request ->
                     OutlinedCard(
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -112,23 +114,66 @@ fun TrustedPane(
                         ) {
                             Column {
                                 Text(
-                                    text = protegee.name,
+                                    text = "Asked ${request.otherName} for protection",
                                     style = MaterialTheme.typography.titleMedium
                                 )
                                 Text(
-                                    text = protegee.phone,
+                                    text = request.otherPhone,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "Relationship: ${protegee.relation}",
+                                    text = "Relationship: ${request.relation}",
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            IconButton(onClick = { onRemoveProtegee(protegee) }) {
+                            TextButton(onClick = { onCancelOutgoing(request) }) {
+                                Text("Cancel")
+                            }
+                        }
+                    }
+                }
+            }
+
+            // My Trusted Contacts section
+            if (trustedContacts.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "My Trusted Contacts",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                items(trustedContacts) { contact ->
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = contact.name,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = contact.phone,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "Relationship: ${contact.relation}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            IconButton(onClick = { onRemoveTrusted(contact) }) {
                                 Icon(
                                     Icons.Default.Delete,
-                                    contentDescription = "Stop protecting",
+                                    contentDescription = "Remove trusted contact",
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -138,7 +183,7 @@ fun TrustedPane(
             }
 
             // Empty state
-            if (incoming.isEmpty() && protegees.isEmpty()) {
+            if (incoming.isEmpty() && outgoing.isEmpty() && trustedContacts.isEmpty()) {
                 item {
                     Box(
                         modifier = Modifier
@@ -147,7 +192,7 @@ fun TrustedPane(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No one to protect yet. Offer to protect someone!",
+                            text = "No trusted contacts yet. Ask someone to protect you!",
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

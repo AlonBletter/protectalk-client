@@ -97,8 +97,8 @@ fun ProtectionScreen(
                 .padding(16.dp)
         ) {
             val tabs = listOf(
-                ProtectionTab.Protegee to "Protegee",
-                ProtectionTab.Trusted to "Trusted Contact"
+                ProtectionTab.Protegee to "My Protegees",
+                ProtectionTab.Trusted to "My Trusted Contacts"
             )
             val selectedIndex = tabs.indexOfFirst { it.first == selectedTab }.coerceAtLeast(0)
             TabRow(selectedTabIndex = selectedIndex) {
@@ -141,19 +141,24 @@ fun ProtectionScreen(
 
             when (selectedTab) {
                 ProtectionTab.Protegee -> ProtegeePane(
-                    outgoing = ui.outgoing,
-                    trustedContacts = ui.trusted,
+                    incoming = ui.incomingProtectionRequests, // People asking for my protection
+                    outgoing = ui.outgoing.filter { it.contactType == "PROTEGEE" }, // Protection offers I sent
+                    protegees = ui.protegees, // People I protect
+                    onAccept = { viewModel.accept(it) },
+                    onDecline = { viewModel.decline(it) },
+                    onCancelOutgoing = { viewModel.cancelOutgoing(it) },
+                    onRemoveProtegee = { viewModel.removeProtegee(it) },
+                    onOpenAddDialog = { dialogRole = DialogRole.TrustedOffers; showDialog = true }
+                )
+                ProtectionTab.Trusted -> TrustedPane(
+                    incoming = ui.incomingProtectionOffers, // People offering to protect me
+                    outgoing = ui.outgoing.filter { it.contactType == "TRUSTED_CONTACT" || it.contactType == "TRUSTED" }, // Protection requests I sent
+                    trustedContacts = ui.trusted, // My trusted contacts
+                    onAccept = { viewModel.accept(it) },
+                    onDecline = { viewModel.decline(it) },
                     onCancelOutgoing = { viewModel.cancelOutgoing(it) },
                     onRemoveTrusted = { viewModel.removeTrusted(it) },
                     onOpenAddDialog = { dialogRole = DialogRole.ProtegeeAsks; showDialog = true }
-                )
-                ProtectionTab.Trusted -> TrustedPane(
-                    incoming = ui.incoming,
-                    protegees = ui.protegees,
-                    onAccept = { viewModel.accept(it) },
-                    onDecline = { viewModel.decline(it) },
-                    onRemoveProtegee = { viewModel.removeProtegee(it) },
-                    onOpenAddDialog = { dialogRole = DialogRole.TrustedOffers; showDialog = true }
                 )
             }
         }
