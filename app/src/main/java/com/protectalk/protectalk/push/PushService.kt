@@ -80,7 +80,7 @@ class PushService : FirebaseMessagingService() {
     private fun handleContactRequestReceived(message: RemoteMessage) {
         Log.d(TAG, "Handling contact request received notification")
 
-        val senderName = message.data["senderName"] ?: "Someone"
+        val senderName = message.data["requesterName"] ?: "Someone"
         val requestType = message.data["contactType"] ?: "TRUSTED"
 
         val title = when (requestType) {
