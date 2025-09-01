@@ -68,13 +68,13 @@ fun PendingContactRequestDto.toUIModelForIncoming(): PendingRequest {
 
     val requestId = id ?: run {
         android.util.Log.w("Models", "Server didn't provide ID for pending request")
-        "${targetName}_${targetPhoneNumber}_${System.currentTimeMillis()}"
+        "${requesterName}_${requesterPhoneNumber}_${System.currentTimeMillis()}"
     }
 
     return PendingRequest(
         id = requestId,
-        otherName = targetName ?: targetPhoneNumber, // Show the target user's name (who sent us the request)
-        otherPhone = targetPhoneNumber,
+        otherName = requesterName, // Show who sent me the request (the requester)
+        otherPhone = requesterPhoneNumber, // Show the requester's phone number
         relation = relation,
         contactType = contactType
     )
@@ -95,8 +95,8 @@ fun PendingContactRequestDto.toUIModelForOutgoing(): PendingRequest {
 
     return PendingRequest(
         id = requestId,
-        otherName = targetName ?: targetPhoneNumber, // Show who we sent the request to
-        otherPhone = targetPhoneNumber,
+        otherName = targetName ?: targetPhoneNumber, // Show who I sent the request to (the target)
+        otherPhone = targetPhoneNumber, // Show the target's phone number
         relation = relation,
         contactType = contactType
     )
