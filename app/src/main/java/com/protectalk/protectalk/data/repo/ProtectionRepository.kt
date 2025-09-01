@@ -12,42 +12,42 @@ import javax.inject.Singleton
 class ProtectionRepository @Inject constructor(
     private val apiService: ApiService
 ) {
-    suspend fun sendInvite(body: Map<String, Any>): ResultModel<Unit> = try {
-        val response = apiService.sendInvite(body)
-        if (response.isSuccessful) {
-            ResultModel.Ok(Unit)
-        } else {
-            val errorBody = response.errorBody()?.string()
-            ResultModel.Err("Failed to send invite: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
-        }
-    } catch (t: Throwable) {
-        ResultModel.Err("Failed to send invite", t)
-    }
-
-    suspend fun respondInvite(body: Map<String, Any>): ResultModel<Unit> = try {
-        val response = apiService.respondInvite(body)
-        if (response.isSuccessful) {
-            ResultModel.Ok(Unit)
-        } else {
-            val errorBody = response.errorBody()?.string()
-            ResultModel.Err("Failed to respond to invite: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
-        }
-    } catch (t: Throwable) {
-        ResultModel.Err("Failed to respond to invite", t)
-    }
-
-    suspend fun getLinks(): ResultModel<Map<String, Any>> = try {
-        val response = apiService.getLinks()
-        if (response.isSuccessful) {
-            val data = response.body() ?: emptyMap()
-            ResultModel.Ok(data)
-        } else {
-            val errorBody = response.errorBody()?.string()
-            ResultModel.Err("Failed to load links: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
-        }
-    } catch (t: Throwable) {
-        ResultModel.Err("Failed to load links", t)
-    }
+//    suspend fun sendInvite(body: Map<String, Any>): ResultModel<Unit> = try {
+//        val response = apiService.sendInvite(body)
+//        if (response.isSuccessful) {
+//            ResultModel.Ok(Unit)
+//        } else {
+//            val errorBody = response.errorBody()?.string()
+//            ResultModel.Err("Failed to send invite: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
+//        }
+//    } catch (t: Throwable) {
+//        ResultModel.Err("Failed to send invite", t)
+//    }
+//
+//    suspend fun respondInvite(body: Map<String, Any>): ResultModel<Unit> = try {
+//        val response = apiService.respondInvite(body)
+//        if (response.isSuccessful) {
+//            ResultModel.Ok(Unit)
+//        } else {
+//            val errorBody = response.errorBody()?.string()
+//            ResultModel.Err("Failed to respond to invite: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
+//        }
+//    } catch (t: Throwable) {
+//        ResultModel.Err("Failed to respond to invite", t)
+//    }
+//
+//    suspend fun getLinks(): ResultModel<Map<String, Any>> = try {
+//        val response = apiService.getLinks()
+//        if (response.isSuccessful) {
+//            val data = response.body() ?: emptyMap()
+//            ResultModel.Ok(data)
+//        } else {
+//            val errorBody = response.errorBody()?.string()
+//            ResultModel.Err("Failed to load links: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
+//        }
+//    } catch (t: Throwable) {
+//        ResultModel.Err("Failed to load links", t)
+//    }
 
     suspend fun sendContactRequest(contactRequest: ContactRequestDto): ResultModel<Unit> = try {
         Log.d("ProtectionRepository", "Sending contact request to server...")
@@ -116,5 +116,29 @@ class ProtectionRepository @Inject constructor(
         }
     } catch (t: Throwable) {
         ResultModel.Err("Failed to deny request", t)
+    }
+
+    suspend fun deleteLinkedContact(phoneNumber: String, contactType: String): ResultModel<Unit> = try {
+        val response = apiService.deleteLinkedContact(phoneNumber, contactType)
+        if (response.isSuccessful) {
+            ResultModel.Ok(Unit)
+        } else {
+            val errorBody = response.errorBody()?.string()
+            ResultModel.Err("Failed to delete contact: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
+        }
+    } catch (t: Throwable) {
+        ResultModel.Err("Failed to delete contact", t)
+    }
+
+    suspend fun cancelRequest(requestId: String): ResultModel<Unit> = try {
+        val response = apiService.cancelRequest(requestId)
+        if (response.isSuccessful) {
+            ResultModel.Ok(Unit)
+        } else {
+            val errorBody = response.errorBody()?.string()
+            ResultModel.Err("Failed to cancel request: HTTP ${response.code()} - ${response.message()}${if (errorBody != null) " - $errorBody" else ""}")
+        }
+    } catch (t: Throwable) {
+        ResultModel.Err("Failed to cancel request", t)
     }
 }

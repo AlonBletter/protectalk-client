@@ -8,6 +8,8 @@ import com.protectalk.protectalk.domain.SendContactRequestUseCase
 import com.protectalk.protectalk.domain.GetUserProfileUseCase
 import com.protectalk.protectalk.domain.ApproveContactRequestUseCase
 import com.protectalk.protectalk.domain.DenyContactRequestUseCase
+import com.protectalk.protectalk.domain.DeleteLinkedContactUseCase
+import com.protectalk.protectalk.domain.CancelRequestUseCase
 import com.protectalk.protectalk.data.remote.network.ApiClient
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +34,8 @@ class ProtectionViewModel : ViewModel() {
     private val getUserProfileUseCase = GetUserProfileUseCase() // Use the existing use case instead of repository directly
     private val approveContactRequestUseCase = ApproveContactRequestUseCase()
     private val denyContactRequestUseCase = DenyContactRequestUseCase()
+    private val deleteLinkedContactUseCase = DeleteLinkedContactUseCase()
+    private val cancelRequestUseCase = CancelRequestUseCase()
 
     private val _ui = MutableStateFlow(
         ProtectionUiState(
@@ -121,13 +125,54 @@ class ProtectionViewModel : ViewModel() {
 
     // ...existing local state management methods...
     fun cancelOutgoing(req: PendingRequest) = viewModelScope.launch {
-        _ui.value = _ui.value.copy(outgoing = _ui.value.outgoing.filterNot { it.id == req.id })
-        // TODO(DB): mark canceled
+        _ui.value = _ui.value.copy(isLoading = true, error = null)
+
+        Log.d("ProtectionViewModel", "Canceling outgoing request with ID: ${req.id}")
+
+        val result = cancelRequestUseCase(req.id)
+
+        when (result) {
+            is ResultModel.Ok -> {
+                Log.d("ProtectionViewModel", "Request canceled successfully")
+                // Update UI state: remove from outgoing
+                _ui.value = _ui.value.copy(
+                    outgoing = _ui.value.outgoing.filterNot { it.id == req.id },
+                    isLoading = false,
+                    error = null
+                )
+            }
+
+            is ResultModel.Err -> {
+                Log.e("ProtectionViewModel", "Failed to cancel request: ${result.message}")
+                _ui.value = _ui.value.copy(
+                    isLoading = false,
+                    error = "Failed to cancel request: ${result.message}"
+                )
+            }
+        }
     }
 
     fun removeTrusted(c: LinkContact) = viewModelScope.launch {
-        _ui.value = _ui.value.copy(trusted = _ui.value.trusted.filterNot { it.id == c.id })
-        // TODO(DB): remove relationship both sides
+        _ui.value = _ui.value.copy(isLoading = true, error = null)
+
+        val result = deleteLinkedContactUseCase(c.phone, "TRUSTED_CONTACT")
+
+        when (result) {
+            is ResultModel.Ok -> {
+                _ui.value = _ui.value.copy(
+                    trusted = _ui.value.trusted.filterNot { it.id == c.id },
+                    isLoading = false,
+                    error = null
+                )
+            }
+
+            is ResultModel.Err -> {
+                _ui.value = _ui.value.copy(
+                    isLoading = false,
+                    error = "Failed to remove trusted contact: ${result.message}"
+                )
+            }
+        }
     }
 
     fun accept(req: PendingRequest) = viewModelScope.launch {
@@ -223,9 +268,31 @@ class ProtectionViewModel : ViewModel() {
     }
 
     fun removeProtegee(c: LinkContact) = viewModelScope.launch {
-        _ui.value = _ui.value.copy(protegees = _ui.value.protegees.filterNot { it.id == c.id })
-        // TODO(DB): remove relationship both sides
-        // TODO(FCM): notify protegee
+        _ui.value = _ui.value.copy(isLoading = true, error = null)
+
+        Log.d("ProtectionViewModel", "Removing protegee: ${c.phone}")
+
+        val result = deleteLinkedContactUseCase(c.phone, "PROTEGEE")
+
+        when (result) {
+            is ResultModel.Ok -> {
+                Log.d("ProtectionViewModel", "Protegee removed successfully")
+                // Update UI state: remove from protegees
+                _ui.value = _ui.value.copy(
+                    protegees = _ui.value.protegees.filterNot { it.id == c.id },
+                    isLoading = false,
+                    error = null
+                )
+            }
+
+            is ResultModel.Err -> {
+                Log.e("ProtectionViewModel", "Failed to remove protegee: ${result.message}")
+                _ui.value = _ui.value.copy(
+                    isLoading = false,
+                    error = "Failed to remove protegee: ${result.message}"
+                )
+            }
+        }
     }
 
     // Refresh functionality - polls server and updates UI
