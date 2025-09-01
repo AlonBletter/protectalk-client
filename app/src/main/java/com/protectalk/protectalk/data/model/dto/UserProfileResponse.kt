@@ -25,10 +25,10 @@ data class LinkedContactDto(
 @JsonClass(generateAdapter = true)
 data class PendingContactRequestDto(
     val id: String? = null,
-    val requesterName: String,
     val targetPhoneNumber: String,
+    val targetName: String? = null, // Add target user's name
     val relationship: String,
     val contactType: String,
     val status: String,
-    val createdAt: String? = null, // Changed back to String for JSON compatibility
+    val createdAt: String? = null // Changed back to String for JSON compatibility
 )

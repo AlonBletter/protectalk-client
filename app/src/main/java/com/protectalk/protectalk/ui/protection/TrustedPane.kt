@@ -5,13 +5,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -112,10 +111,14 @@ fun TrustedPane(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
                                 Text(
                                     text = "Asked ${request.otherName} for protection",
-                                    style = MaterialTheme.typography.titleMedium
+                                    style = MaterialTheme.typography.titleMedium,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = request.otherPhone,
@@ -127,8 +130,15 @@ fun TrustedPane(
                                     style = MaterialTheme.typography.bodySmall
                                 )
                             }
-                            TextButton(onClick = { onCancelOutgoing(request) }) {
-                                Text("Cancel")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(
+                                onClick = { onCancelOutgoing(request) },
+                                modifier = Modifier.wrapContentWidth()
+                            ) {
+                                Text(
+                                    text = "Cancel",
+                                    maxLines = 1
+                                )
                             }
                         }
                     }

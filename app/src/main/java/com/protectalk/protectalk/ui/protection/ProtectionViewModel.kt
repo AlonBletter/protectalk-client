@@ -10,17 +10,21 @@ import com.protectalk.protectalk.domain.ApproveContactRequestUseCase
 import com.protectalk.protectalk.domain.DenyContactRequestUseCase
 import com.protectalk.protectalk.domain.DeleteLinkedContactUseCase
 import com.protectalk.protectalk.domain.CancelRequestUseCase
-import com.protectalk.protectalk.data.remote.network.ApiClient
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 data class ProtectionUiState(
-    val outgoing: List<PendingRequest> = emptyList(),   // Requests I sent
-    val incomingProtectionRequests: List<PendingRequest> = emptyList(), // People asking for my protection
-    val incomingProtectionOffers: List<PendingRequest> = emptyList(),   // People offering to protect me
+    // Outgoing requests (what I sent)
+    val outgoingTrustedRequests: List<PendingRequest> = emptyList(),   // I asked someone to be my trusted contact
+    val outgoingProtegeeOffers: List<PendingRequest> = emptyList(),    // I offered to protect someone (make them my protegee)
+
+    // Incoming requests (what I received)
+    val incomingProtectionRequests: List<PendingRequest> = emptyList(), // People asking for my protection (they want to be my protegee)
+    val incomingProtectionOffers: List<PendingRequest> = emptyList(),   // People offering to protect me (they want to be my trusted contact)
+
+    // Established contacts
     val trusted:  List<LinkContact>   = emptyList(),    // my trusted contacts
     val protegees: List<LinkContact>  = emptyList(),    // people I protect
     val isLoading: Boolean = false,
@@ -40,7 +44,8 @@ class ProtectionViewModel : ViewModel() {
     private val _ui = MutableStateFlow(
         ProtectionUiState(
             // Remove mock data - will be loaded from server
-            outgoing = emptyList(),
+            outgoingTrustedRequests = emptyList(),
+            outgoingProtegeeOffers = emptyList(),
             incomingProtectionRequests = emptyList(),
             incomingProtectionOffers = emptyList(),
             trusted = emptyList(),
@@ -71,7 +76,7 @@ class ProtectionViewModel : ViewModel() {
                 // Add to local state as pending
                 val id = System.currentTimeMillis().toString()
                 _ui.value = _ui.value.copy(
-                    outgoing = _ui.value.outgoing + PendingRequest(id, name, phone, relation, "TRUSTED_CONTACT"),
+                    outgoingTrustedRequests = _ui.value.outgoingTrustedRequests + PendingRequest(id, name, phone, relation, "TRUSTED_CONTACT"),
                     isLoading = false,
                     error = null
                 )
@@ -103,7 +108,7 @@ class ProtectionViewModel : ViewModel() {
                 // Add to local state as pending - this should be OUTGOING, not incoming
                 val id = System.currentTimeMillis().toString()
                 _ui.value = _ui.value.copy(
-                    outgoing = _ui.value.outgoing + PendingRequest(id, name, phone, relation, "PROTEGEE"),
+                    outgoingProtegeeOffers = _ui.value.outgoingProtegeeOffers + PendingRequest(id, name, phone, relation, "PROTEGEE"),
                     isLoading = false,
                     error = null
                 )
@@ -136,7 +141,8 @@ class ProtectionViewModel : ViewModel() {
                 Log.d("ProtectionViewModel", "Request canceled successfully")
                 // Update UI state: remove from outgoing
                 _ui.value = _ui.value.copy(
-                    outgoing = _ui.value.outgoing.filterNot { it.id == req.id },
+                    outgoingTrustedRequests = _ui.value.outgoingTrustedRequests.filterNot { it.id == req.id },
+                    outgoingProtegeeOffers = _ui.value.outgoingProtegeeOffers.filterNot { it.id == req.id },
                     isLoading = false,
                     error = null
                 )
@@ -310,8 +316,8 @@ class ProtectionViewModel : ViewModel() {
                     Log.d("ProtectionViewModel", "Profile fetched successfully via use case")
 
                     // Map server data to UI models and separate by contact type
-                    val outgoingRequests = profile.pendingSentRequests?.map { it.toUIModel() } ?: emptyList()
-                    val allIncomingRequests = profile.pendingReceivedRequests?.map { it.toUIModel() } ?: emptyList()
+                    val outgoingRequests = profile.pendingSentRequests?.map { it.toUIModelForOutgoing() } ?: emptyList()
+                    val allIncomingRequests = profile.pendingReceivedRequests?.map { it.toUIModelForIncoming() } ?: emptyList()
 
                     // Separate incoming requests by type
                     val protectionRequests = allIncomingRequests.filter { it.contactType == "TRUSTED_CONTACT" || it.contactType == "TRUSTED" }
@@ -322,7 +328,8 @@ class ProtectionViewModel : ViewModel() {
 
                     // Update UI state with properly separated data
                     _ui.value = _ui.value.copy(
-                        outgoing = outgoingRequests,
+                        outgoingTrustedRequests = outgoingRequests.filter { it.contactType == "TRUSTED_CONTACT" },
+                        outgoingProtegeeOffers = outgoingRequests.filter { it.contactType == "PROTEGEE" },
                         incomingProtectionRequests = protectionRequests, // People asking for my protection
                         incomingProtectionOffers = protectionOffers,     // People offering to protect me
                         trusted = trustedContacts,
@@ -331,7 +338,7 @@ class ProtectionViewModel : ViewModel() {
                         error = null
                     )
 
-                    Log.d("ProtectionViewModel", "UI updated - Outgoing: ${outgoingRequests.size}, Protection Requests: ${protectionRequests.size}, Protection Offers: ${protectionOffers.size}, Trusted: ${trustedContacts.size}, Protegees: ${protegeeContacts.size}")
+                    Log.d("ProtectionViewModel", "UI updated - Outgoing Trusted: ${outgoingRequests.size}, Outgoing Protegee: ${outgoingRequests.size}, Protection Requests: ${protectionRequests.size}, Protection Offers: ${protectionOffers.size}, Trusted: ${trustedContacts.size}, Protegees: ${protegeeContacts.size}")
                 }
 
                 is ResultModel.Err -> {

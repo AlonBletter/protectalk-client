@@ -58,24 +58,46 @@ fun LinkedContactDto.toUIModel(): LinkContact {
     )
 }
 
-fun PendingContactRequestDto.toUIModel(): PendingRequest {
+// For incoming requests (from pendingReceivedRequests) - show who sent the request
+fun PendingContactRequestDto.toUIModelForIncoming(): PendingRequest {
     val relation = when (relationship.uppercase()) {
         "FAMILY" -> Relation.Family
         "FRIEND" -> Relation.Friend
         else -> Relation.Other
     }
 
-    // The server should always provide an ID for pending requests
     val requestId = id ?: run {
-        android.util.Log.w("Models", "Server didn't provide ID for pending request from $requesterName, this may cause approve/deny to fail")
-        "${requesterName}_${targetPhoneNumber}_${System.currentTimeMillis()}" // Fallback only for safety
+        android.util.Log.w("Models", "Server didn't provide ID for pending request")
+        "${targetName}_${targetPhoneNumber}_${System.currentTimeMillis()}"
     }
 
     return PendingRequest(
         id = requestId,
-        otherName = requesterName,
+        otherName = targetName ?: targetPhoneNumber, // Show the target user's name (who sent us the request)
         otherPhone = targetPhoneNumber,
         relation = relation,
-        contactType = contactType // Use the actual contactType from server
+        contactType = contactType
+    )
+}
+
+// For outgoing requests (from pendingSentRequests) - show who we sent the request to
+fun PendingContactRequestDto.toUIModelForOutgoing(): PendingRequest {
+    val relation = when (relationship.uppercase()) {
+        "FAMILY" -> Relation.Family
+        "FRIEND" -> Relation.Friend
+        else -> Relation.Other
+    }
+
+    val requestId = id ?: run {
+        android.util.Log.w("Models", "Server didn't provide ID for pending request")
+        "${targetName}_${targetPhoneNumber}_${System.currentTimeMillis()}"
+    }
+
+    return PendingRequest(
+        id = requestId,
+        otherName = targetName ?: targetPhoneNumber, // Show who we sent the request to
+        otherPhone = targetPhoneNumber,
+        relation = relation,
+        contactType = contactType
     )
 }

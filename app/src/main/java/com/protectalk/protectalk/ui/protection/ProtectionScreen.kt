@@ -142,7 +142,7 @@ fun ProtectionScreen(
             when (selectedTab) {
                 ProtectionTab.Protegee -> ProtegeePane(
                     incoming = ui.incomingProtectionRequests, // People asking for my protection
-                    outgoing = ui.outgoing.filter { it.contactType == "PROTEGEE" }, // Protection offers I sent
+                    outgoing = ui.outgoingProtegeeOffers, // Protection offers I sent
                     protegees = ui.protegees, // People I protect
                     onAccept = { viewModel.accept(it) },
                     onDecline = { viewModel.decline(it) },
@@ -152,7 +152,7 @@ fun ProtectionScreen(
                 )
                 ProtectionTab.Trusted -> TrustedPane(
                     incoming = ui.incomingProtectionOffers, // People offering to protect me
-                    outgoing = ui.outgoing.filter { it.contactType == "TRUSTED_CONTACT" || it.contactType == "TRUSTED" }, // Protection requests I sent
+                    outgoing = ui.outgoingTrustedRequests, // Protection requests I sent
                     trustedContacts = ui.trusted, // My trusted contacts
                     onAccept = { viewModel.accept(it) },
                     onDecline = { viewModel.decline(it) },
