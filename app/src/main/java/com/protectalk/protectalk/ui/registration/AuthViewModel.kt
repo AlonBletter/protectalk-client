@@ -47,6 +47,8 @@ class AuthViewModel : ViewModel() {
         AuthInterceptor.instance.clearCachedToken()
         // Clear cached FCM tokens to ensure fresh tokens for next user
         PushManager.clearTokens()
+        // Stop alert monitoring when user logs out
+        // Note: We need context to stop the service, this will be handled in the UI layer
         // Update UI state
         _ui.value = _ui.value.copy(isSignedIn = false)
         Log.d(TAG, "Logout complete - Firebase auth, JWT cache, and FCM tokens cleared")
