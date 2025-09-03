@@ -17,12 +17,15 @@ class CompleteRegistrationUseCase {
         // Get or generate device ID
         val deviceId = getOrCreateDeviceId(context)
 
-        // Get FCM token - try cached first, then fetch fresh
-        val fcmToken = PushManager.cachedFcmToken ?: PushManager.fetchFcmToken()
+        // Force fetch a fresh FCM token for each new user registration
+        // This ensures each user gets a unique token, not a cached one from previous users
+        val fcmToken = PushManager.fetchFcmToken(forceRefresh = true)
         if (fcmToken == null) {
             Log.e("CompleteRegistration", "Failed to get FCM token")
             return ResultModel.Err("Failed to get FCM token")
         }
+
+        Log.d("CompleteRegistration", "Using fresh FCM token for new user: ${fcmToken.take(10)}...")
 
         // Refresh Firebase ID token for authentication
         val idToken = PushManager.refreshIdToken()

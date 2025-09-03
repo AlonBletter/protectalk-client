@@ -1,16 +1,13 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
 
 package com.protectalk.protectalk.ui.protection
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -18,6 +15,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun AddProtectionDialog(
     role: DialogRole,
+    isLoading: Boolean = false,
     onDismiss: () -> Unit,
     onSubmit: (name: String, phone: String, relation: Relation) -> Unit
 ) {
@@ -27,7 +25,7 @@ fun AddProtectionDialog(
     var relationMenuOpen by remember { mutableStateOf(false) }
 
     AlertDialog(
-        onDismissRequest = { onDismiss() }, // Cancel hides dialog
+        onDismissRequest = { if (!isLoading) onDismiss() }, // Prevent dismiss while loading
         title = {
             Text(
                 when (role) {
@@ -43,6 +41,7 @@ fun AddProtectionDialog(
                     onValueChange = { name = it },
                     label = { Text("Name") },
                     singleLine = true,
+                    enabled = !isLoading,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
@@ -50,6 +49,7 @@ fun AddProtectionDialog(
                     onValueChange = { phone = it },
                     label = { Text("Phone number") },
                     singleLine = true,
+                    enabled = !isLoading,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -58,28 +58,29 @@ fun AddProtectionDialog(
 
                 // Relation dropdown
                 ExposedDropdownMenuBox(
-                    expanded = relationMenuOpen,
-                    onExpandedChange = { relationMenuOpen = it },
+                    expanded = relationMenuOpen && !isLoading,
+                    onExpandedChange = { if (!isLoading) relationMenuOpen = it },
                     modifier = Modifier.padding(top = 12.dp)
                 ) {
                     OutlinedTextField(
                         value = relation.name,
                         onValueChange = {},
                         readOnly = true,
+                        enabled = !isLoading,
                         label = { Text("Relation") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = relationMenuOpen) },
                         modifier = Modifier
                             .fillMaxWidth()
                             .menuAnchor(
                                 type = MenuAnchorType.PrimaryNotEditable,
-                                enabled = true
+                                enabled = !isLoading
                             )
                     )
                     ExposedDropdownMenu(
-                        expanded = relationMenuOpen,
+                        expanded = relationMenuOpen && !isLoading,
                         onDismissRequest = { relationMenuOpen = false }
                     ) {
-                        Relation.values().forEach { r ->
+                        Relation.entries.forEach { r ->
                             DropdownMenuItem(
                                 text = { Text(r.name) },
                                 onClick = {
@@ -93,19 +94,42 @@ fun AddProtectionDialog(
             }
         },
         confirmButton = {
-            TextButton(
+            Button(
                 onClick = {
                     if (name.isNotBlank() && phone.isNotBlank()) {
                         onSubmit(name.trim(), phone.trim(), relation)
                     }
+                },
+                enabled = !isLoading && name.isNotBlank() && phone.isNotBlank()
+            ) {
+                if (isLoading) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text("Sending...")
+                    }
+                } else {
+                    Text(
+                        when (role) {
+                            DialogRole.ProtegeeAsks -> "Send Request"
+                            DialogRole.TrustedOffers -> "Send Offer"
+                        }
+                    )
                 }
-            ) { Text("Save") /* TODO: rename to "Send" on Protegee, "Offer" on Trusted if desired */ }
-        },
-        dismissButton = {
-            TextButton(onClick = { onDismiss() }) {
-                Text("Cancel") // TODO: if you add draft state later, rollback here too
             }
         },
-        modifier = Modifier.height(IntrinsicSize.Min)
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isLoading
+            ) {
+                Text("Cancel")
+            }
+        }
     )
 }

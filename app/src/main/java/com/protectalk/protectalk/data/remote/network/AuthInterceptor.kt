@@ -19,6 +19,9 @@ class AuthInterceptor : Interceptor {
 
         // Refresh token 5 minutes before expiry to be safe
         private const val REFRESH_BUFFER_MS = 5 * 60 * 1000L
+
+        // Singleton instance
+        val instance: AuthInterceptor by lazy { AuthInterceptor() }
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {

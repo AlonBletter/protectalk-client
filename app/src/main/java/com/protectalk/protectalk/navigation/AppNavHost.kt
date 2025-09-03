@@ -123,7 +123,8 @@ fun AppNavHost(navController: NavHostController) {
                         },
                         // Pass the auth state for loading/error handling
                         isLoading = ui.isSubmitting,
-                        errorMessage = ui.error
+                        errorMessage = ui.error,
+                        authViewModel = authViewModel
                     )
                 }
 

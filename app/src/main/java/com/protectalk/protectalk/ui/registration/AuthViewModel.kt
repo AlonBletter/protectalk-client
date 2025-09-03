@@ -6,7 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
 import com.protectalk.protectalk.data.model.ResultModel
+import com.protectalk.protectalk.data.remote.network.AuthInterceptor
 import com.protectalk.protectalk.domain.CompleteRegistrationUseCase
+import com.protectalk.protectalk.push.PushManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,8 +41,17 @@ class AuthViewModel : ViewModel() {
 
     fun signOut() {
         Log.d(TAG, "signOut()")
+        // Clear Firebase authentication
         auth.signOut()
+        // Clear cached JWT token from AuthInterceptor
+        AuthInterceptor.instance.clearCachedToken()
+        // Clear cached FCM tokens to ensure fresh tokens for next user
+        PushManager.clearTokens()
+        // Stop alert monitoring when user logs out
+        // Note: We need context to stop the service, this will be handled in the UI layer
+        // Update UI state
         _ui.value = _ui.value.copy(isSignedIn = false)
+        Log.d(TAG, "Logout complete - Firebase auth, JWT cache, and FCM tokens cleared")
     }
 
     fun signIn(
