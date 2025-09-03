@@ -10,7 +10,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        buildConfigField("String", "BASE_URL", "\"http://192.168.1.132:8080/\"")
+        //buildConfigField("String", "BASE_URL", "\"http://192.168.1.132:8080/\"")
+        buildConfigField("String", "BASE_URL", "\"http://vmedu428.mtacloud.co.il:8080/\"")
         applicationId = "com.protectalk.protectalk"
         minSdk = 24
         targetSdk = 36
