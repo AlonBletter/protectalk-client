@@ -3,29 +3,45 @@ package com.protectalk.protectalk.alert.scam
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.IOException
-import java.util.concurrent.TimeUnit
 
 /**
- * Handles scam analysis using OpenAI's ChatGPT API
+ * Represents the result of a scam analysis using a language model.
+ */
+data class ScamResult(
+    val score: Double, // Changed from Int to Double for 0.0-1.0 range
+    val analysisPoints: List<String>
+)
+
+/**
+ * Handles scam analysis logic by invoking the OpenAI GPT API with a specialized prompt.
+ *
+ * @param apiKey The OpenAI API key used for authentication.
  */
 class ChatGPTAnalyzer(private val apiKey: String) {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .build()
-
     companion object {
-        private const val TAG = "ChatGPTAnalyzer"
-        private const val OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+        private const val LOG_TAG: String = "ChatGPTAnalyzer"
 
-        private const val SCAM_ANALYSIS_PROMPT = """
+        private const val OPENAI_CHAT_COMPLETION_ENDPOINT: String =
+            "https://api.openai.com/v1/chat/completions"
+
+        private const val MODEL_NAME: String = "gpt-4-turbo"
+        private const val TEMPERATURE: Double = 0.2
+
+        private const val SCAM_SCORE_KEY = "scam_score"
+        private const val ANALYSIS_KEY = "analysis"
+
+        private val JSON_MEDIA_TYPE = "application/json".toMediaTypeOrNull()
+
+        private const val MAX_ANALYSIS_POINTS = 3
+
+        private const val SYSTEM_PROMPT = """
 You are an expert scam detection AI. Analyze the following phone call transcript and determine if it's a scam call.
 
 Please provide:
@@ -55,164 +71,76 @@ Transcript to analyze:
 """
     }
 
+    private val httpClient: OkHttpClient = OkHttpClient()
+
     /**
-     * Analyzes a transcript for scam indicators using ChatGPT
+     * Submits a transcript to GPT for scam analysis and returns a [ScamResult].
+     *
+     * @param transcript The call transcript to analyze.
+     * @return The scam score and analysis bullet points.
      */
-    suspend fun analyzeForScam(transcript: String, callerNumber: String): AnalysisResult = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "Starting scam analysis for transcript from $callerNumber")
+    suspend fun analyze(transcript: String): ScamResult = withContext(Dispatchers.IO) {
+        Log.d(LOG_TAG, "🧠 Analyzing transcript (preview): ${transcript.take(50)}...")
 
-            if (transcript.isBlank()) {
-                Log.w(TAG, "Empty transcript provided")
-                return@withContext AnalysisResult.Error("Empty transcript")
-            }
-
-            val result = performAnalysis(transcript, callerNumber)
-            Log.i(TAG, "Scam analysis completed")
-            result
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during scam analysis", e)
-            AnalysisResult.Error("Analysis failed: ${e.message}")
+        val requestMessages = JSONArray().apply {
+            put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
+            put(JSONObject().put("role", "user").put("content", transcript))
         }
-    }
 
-    private suspend fun performAnalysis(transcript: String, callerNumber: String): AnalysisResult {
-        return try {
-            val fullPrompt = "$SCAM_ANALYSIS_PROMPT\n\n\"$transcript\""
-
-            val requestJson = JSONObject().apply {
-                put("model", "gpt-3.5-turbo")
-                put("messages", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("role", "system")
-                        put("content", "You are a professional scam detection expert.")
-                    })
-                    put(JSONObject().apply {
-                        put("role", "user")
-                        put("content", fullPrompt)
-                    })
-                })
-                put("max_tokens", 500)
-                put("temperature", 0.3) // Lower temperature for more consistent analysis
-            }
-
-            val requestBody = requestJson.toString().toRequestBody("application/json".toMediaType())
-
-            val request = Request.Builder()
-                .url(OPENAI_API_URL)
-                .post(requestBody)
-                .addHeader("Authorization", "Bearer $apiKey")
-                .addHeader("Content-Type", "application/json")
-                .build()
-
-            val response = client.newCall(request).execute()
-
-            if (response.isSuccessful) {
-                val responseBody = response.body?.string()
-                parseAnalysisResponse(responseBody)
-            } else {
-                val errorBody = response.body?.string()
-                Log.e(TAG, "OpenAI API request failed: ${response.code} - $errorBody")
-                AnalysisResult.Error("API request failed: ${response.code}")
-            }
-
-        } catch (e: IOException) {
-            Log.e(TAG, "Network error during analysis", e)
-            AnalysisResult.Error("Network error: ${e.message}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error during analysis", e)
-            AnalysisResult.Error("Analysis error: ${e.message}")
+        val requestPayload = JSONObject().apply {
+            put("model", MODEL_NAME)
+            put("messages", requestMessages)
+            put("temperature", TEMPERATURE)
         }
-    }
 
-    private fun parseAnalysisResponse(responseBody: String?): AnalysisResult {
-        return try {
-            if (responseBody.isNullOrEmpty()) {
-                return AnalysisResult.Error("Empty response from OpenAI API")
-            }
+        val httpRequest = Request.Builder()
+            .url(OPENAI_CHAT_COMPLETION_ENDPOINT)
+            .addHeader("Authorization", "Bearer $apiKey")
+            .post(requestPayload.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
 
-            val jsonResponse = JSONObject(responseBody)
-
-            if (jsonResponse.has("error")) {
-                val error = jsonResponse.getJSONObject("error")
-                val message = error.optString("message", "Unknown OpenAI API error")
-                Log.e(TAG, "OpenAI API returned error: $message")
-                return AnalysisResult.Error("API error: $message")
-            }
-
-            val choices = jsonResponse.optJSONArray("choices")
-            if (choices == null || choices.length() == 0) {
-                return AnalysisResult.Error("No analysis choices returned")
-            }
-
-            val firstChoice = choices.getJSONObject(0)
-            val message = firstChoice.getJSONObject("message")
-            val content = message.getString("content")
-
-            // Parse the JSON response from ChatGPT
-            parseScamAnalysisJson(content)
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing analysis response", e)
-            AnalysisResult.Error("Error parsing response: ${e.message}")
+        val rawResponseText: String = httpClient.newCall(httpRequest).execute().use { response ->
+            val responseBody = response.body?.string() ?: ""
+            Log.d(LOG_TAG, "🔗 GPT HTTP ${response.code}: $responseBody")
+            responseBody
         }
-    }
 
-    private fun parseScamAnalysisJson(content: String): AnalysisResult {
-        return try {
-            // Extract JSON from the response (ChatGPT sometimes adds extra text)
-            val jsonStart = content.indexOf("{")
-            val jsonEnd = content.lastIndexOf("}") + 1
-
-            if (jsonStart == -1 || jsonEnd <= jsonStart) {
-                Log.w(TAG, "No JSON found in response, treating as low-confidence analysis")
-                return AnalysisResult.Success(
-                    scamScore = 0.1,
-                    analysis = content.take(200),
-                    indicators = emptyList(),
-                    riskLevel = "LOW"
+        val messageContent: String = try {
+            JSONObject(rawResponseText)
+                .getJSONArray("choices")
+                .getJSONObject(0)
+                .getJSONObject("message")
+                .getString("content")
+                .trim()
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "❌ Failed to extract message from response: ${e.message}", e)
+            return@withContext ScamResult(
+                score = 0.0,
+                analysisPoints = listOf(
+                    "⚠️ GPT response format error.",
+                    "Raw response: ${rawResponseText.take(150)}"
                 )
-            }
-
-            val jsonContent = content.substring(jsonStart, jsonEnd)
-            val analysisJson = JSONObject(jsonContent)
-
-            val scamScore = analysisJson.optDouble("scamScore", 0.0)
-            val analysis = analysisJson.optString("analysis", "No analysis provided")
-            val riskLevel = analysisJson.optString("riskLevel", "LOW")
-
-            val indicators = mutableListOf<String>()
-            val indicatorsArray = analysisJson.optJSONArray("indicators")
-            if (indicatorsArray != null) {
-                for (i in 0 until indicatorsArray.length()) {
-                    indicators.add(indicatorsArray.getString(i))
-                }
-            }
-
-            Log.d(TAG, "Parsed analysis: score=$scamScore, risk=$riskLevel")
-
-            AnalysisResult.Success(
-                scamScore = scamScore.coerceIn(0.0, 1.0),
-                analysis = analysis,
-                indicators = indicators,
-                riskLevel = riskLevel
             )
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing scam analysis JSON", e)
-            AnalysisResult.Error("Error parsing analysis: ${e.message}")
         }
-    }
 
-    sealed class AnalysisResult {
-        data class Success(
-            val scamScore: Double,
-            val analysis: String,
-            val indicators: List<String>,
-            val riskLevel: String
-        ) : AnalysisResult()
+        val resultJson: JSONObject = try {
+            JSONObject(messageContent)
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "❌ Failed to parse GPT message as JSON: ${e.message}", e)
+            return@withContext ScamResult(
+                score = 0.0,
+                analysisPoints = listOf("⚠️ Could not parse GPT response.", "Raw content:", messageContent)
+            )
+        }
 
-        data class Error(val message: String) : AnalysisResult()
+        val scamScore: Double = resultJson.optDouble("scamScore", 0.0)
+        val analysisJsonArray: JSONArray = resultJson.optJSONArray("indicators") ?:
+                                          resultJson.optJSONArray("analysis") ?: JSONArray()
+
+        val bulletPoints: List<String> = List(analysisJsonArray.length()) { i ->
+            analysisJsonArray.optString(i)
+        }.take(MAX_ANALYSIS_POINTS)
+
+        ScamResult(score = scamScore, analysisPoints = bulletPoints)
     }
 }

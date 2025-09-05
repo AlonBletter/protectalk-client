@@ -25,8 +25,13 @@ android {
         buildConfigField("String", "BASE_URL", "\"http://vmedu428.mtacloud.co.il:8080/\"")
         buildConfigField(
             "String",
-            "GOOGLE_SPEECH_API_KEY",
-            "\"${localProps.getProperty("google_speech_api_key", "")}\""
+            "GOOGLE_API_KEY",
+            "\"${localProps.getProperty("google_api_key", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "GOOGLE_PROJECT_ID",
+            "\"${localProps.getProperty("google_project_id", "protectalk")}\""
         )
         buildConfigField(
             "String",

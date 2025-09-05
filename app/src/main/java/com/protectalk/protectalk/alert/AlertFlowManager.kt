@@ -3,25 +3,18 @@ package com.protectalk.protectalk.alert
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import androidx.annotation.RequiresApi
-import com.protectalk.protectalk.alert.scam.ScamNotificationManager
 import com.protectalk.protectalk.app.di.AppModule
-import com.protectalk.protectalk.BuildConfig
-import com.protectalk.protectalk.data.remote.analysis.ChatGPTAnalyzer
-import com.protectalk.protectalk.data.remote.transcription.Transcriber
-import com.protectalk.protectalk.utils.AudioConverter
-import com.protectalk.protectalk.utils.RecordingFinder
+import com.protectalk.protectalk.alert.scam.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.*
 
 object AlertFlowManager {
 
     private const val TAG = "AlertFlowManager"
-    private const val SCAM_THRESHOLD = 80 // 80% scam probability threshold (your implementation uses 0-100 scale)
+    private const val SCAM_THRESHOLD = 0.8 // 80% scam probability threshold (0.0-1.0 scale)
 
     // Coroutine scope for background operations
     private val alertScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -29,11 +22,11 @@ object AlertFlowManager {
     /**
      * Handles the alert flow when a call from an unknown number ends
      * This is the main entry point for the scam detection system
+     * Compatible with API level 24+
      *
      * @param context The application context
      * @param phoneNumber The phone number of the unknown caller
      */
-    @RequiresApi(Build.VERSION_CODES.S)
     fun handleUnknownCallEnded(context: Context, phoneNumber: String) {
         Log.i(TAG, "🚨 Alert flow triggered for unknown number: $phoneNumber")
 
@@ -48,9 +41,16 @@ object AlertFlowManager {
     }
 
     /**
-     * Complete scam detection pipeline using existing sophisticated implementations
+     * Complete scam detection pipeline following the specified flow:
+     * 1. App triggered when unknown caller call ends
+     * 2. Locate audio file of the call
+     * 3. Transcribe the audio file
+     * 4. Filter sensitive information using DLP
+     * 5. Send filtered transcription to OpenAI for analysis
+     * 6. Report to server with analysis and score
+     * 7. If risk score > 0.8, send notification to user
+     * Compatible with API level 24+
      */
-    @RequiresApi(Build.VERSION_CODES.S)
     private suspend fun processUnknownCallAlert(context: Context, phoneNumber: String) {
         Log.d(TAG, "🔍 Starting scam detection pipeline for $phoneNumber")
 
@@ -58,14 +58,12 @@ object AlertFlowManager {
         ScamNotificationManager.showProcessingNotification(context, phoneNumber)
 
         try {
-            // Step 1: Find the latest call recording using your existing RecordingFinder
-            Log.d(TAG, "📁 Step 1: Searching for latest call recording...")
-            val recordingFile =
-                RecordingFinder.findLatestRecording()
+            // Step 2: Find the latest call recording
+            Log.d(TAG, "📁 Step 2: Searching for latest call recording...")
+            val recordingFile = RecordingFinder.findLatestRecording()
 
             if (recordingFile == null) {
-                Log.w(TAG, "❌ No call recording found or API level too low")
-                // Still report a basic alert without transcript analysis
+                Log.w(TAG, "❌ No call recording found")
                 reportBasicAlert(phoneNumber)
                 ScamNotificationManager.dismissProcessingNotification(context)
                 return
@@ -73,14 +71,10 @@ object AlertFlowManager {
 
             Log.i(TAG, "✅ Found recording: ${recordingFile.name}")
 
-            // Step 2: Convert audio if needed using your existing AudioConverter
-            Log.d(TAG, "🔄 Step 2: Converting audio if needed...")
+            // Convert audio if needed
+            Log.d(TAG, "🔄 Converting audio if needed...")
             val processedFile = if (recordingFile.extension.lowercase() == "m4a") {
-                val wavFile = File(
-                    context.cacheDir,
-                    "converted_${System.currentTimeMillis()}.wav"
-                )
-
+                val wavFile = File(context.cacheDir, "converted_${System.currentTimeMillis()}.wav")
                 val success = AudioConverter.convertM4aToWav(recordingFile, wavFile)
                 if (!success) {
                     Log.e(TAG, "❌ Failed to convert M4A to WAV")
@@ -93,7 +87,7 @@ object AlertFlowManager {
                 recordingFile
             }
 
-            // Step 3: Transcribe using your existing Transcriber with Google Speech-to-Text
+            // Step 3: Transcribe the audio file
             Log.d(TAG, "🎤 Step 3: Transcribing audio to text...")
             val transcript = run {
                 val transcriber = Transcriber()
@@ -109,9 +103,18 @@ object AlertFlowManager {
 
             Log.i(TAG, "✅ Transcription successful: \"${transcript.take(100)}...\"")
 
-            // Step 4: Analyze for scam using your existing ChatGPTAnalyzer
-            Log.d(TAG, "🧠 Step 4: Analyzing transcript for scam indicators...")
-            val openaiApiKey = BuildConfig.OPENAI_API_KEY
+            // Step 4: Filter sensitive information using DLP
+            Log.d(TAG, "🔒 Step 4: Filtering sensitive information using DLP...")
+            val filteredTranscript = run {
+                val dlpClient = DlpClient()
+                dlpClient.deidentifyText(transcript) ?: transcript // Use original if DLP fails
+            }
+
+            Log.i(TAG, "✅ DLP filtering complete")
+
+            // Step 5: Analyze for scam using OpenAI
+            Log.d(TAG, "🧠 Step 5: Analyzing filtered transcript for scam indicators...")
+            val openaiApiKey = getOpenAIApiKey()
             if (openaiApiKey.isBlank()) {
                 Log.e(TAG, "❌ OpenAI API key not configured")
                 reportBasicAlert(phoneNumber)
@@ -120,31 +123,37 @@ object AlertFlowManager {
             }
 
             val analyzer = ChatGPTAnalyzer(openaiApiKey)
-            val scamResult = analyzer.analyze(transcript)
+            val scamResult = analyzer.analyze(filteredTranscript)
 
-            Log.i(TAG, "✅ Analysis complete: ${scamResult.score}% scam probability")
+            // Keep the score as 0-1.0 scale (don't change it as user requested)
+            val riskScore = scamResult.score
 
-            // Step 5: Report to server using existing triggerAlert endpoint
-            Log.d(TAG, "📡 Step 5: Reporting to server...")
+            Log.i(TAG, "✅ Analysis complete: ${(scamResult.score * 100).toInt()}% scam probability")
+
+            // Step 6: Report to server using triggerAlert endpoint
+            Log.d(TAG, "📡 Step 6: Reporting to server...")
             reportScamAlert(
                 phoneNumber = phoneNumber,
-                transcript = transcript,
-                scamScore = scamResult.score,
+                filteredTranscript = filteredTranscript,
+                riskScore = riskScore,
                 analysisPoints = scamResult.analysisPoints
             )
 
-            // Step 6: Notify user if threshold exceeded
-            if (scamResult.score >= SCAM_THRESHOLD) {
-                Log.w(TAG, "🚨 SCAM DETECTED! Score: ${scamResult.score}%")
+            // Step 7: Notify user based on threshold
+            if (riskScore >= SCAM_THRESHOLD) {
+                Log.w(TAG, "🚨 SCAM DETECTED! Risk score: ${(riskScore * 100).toInt()}%")
 
                 ScamNotificationManager.showScamAlert(
                     context = context,
                     callerNumber = phoneNumber,
-                    scamScore = scamResult.score / 100.0, // Convert to 0.0-1.0 for notification
+                    scamScore = riskScore,
                     analysis = scamResult.analysisPoints.joinToString("; ")
                 )
             } else {
-                Log.i(TAG, "✅ Call appears legitimate (score: ${scamResult.score}%)")
+                Log.i(TAG, "✅ Call appears legitimate (score: ${(riskScore * 100).toInt()}%)")
+
+                // Show safe call notification like ProtecTalkService did
+                ScamNotificationManager.showSafeCallNotification(context)
             }
 
             ScamNotificationManager.dismissProcessingNotification(context)
@@ -186,32 +195,35 @@ object AlertFlowManager {
     }
 
     /**
-     * Reports scam analysis to the server using existing triggerAlert endpoint
+     * Reports scam analysis to the server using triggerScamAlert endpoint with filtered transcript
      */
     private suspend fun reportScamAlert(
         phoneNumber: String,
-        transcript: String,
-        scamScore: Int,
+        filteredTranscript: String,
+        riskScore: Double,
         analysisPoints: List<String>
     ) {
         try {
-            val severity = if (scamScore >= SCAM_THRESHOLD) "urgent" else "info"
-
-            val message = buildString {
-                append("Scam Analysis Report\n")
-                append("Caller: $phoneNumber\n")
-                append("Scam Score: $scamScore%\n")
-                append("Risk Level: $severity\n")
-                if (analysisPoints.isNotEmpty()) {
-                    append("Analysis:\n")
-                    analysisPoints.forEach { point ->
-                        append("• $point\n")
-                    }
-                }
-                append("\nTranscript: ${transcript.take(500)}...")
+            val riskLevel = when {
+                riskScore >= 0.8 -> com.protectalk.protectalk.data.model.dto.RiskLevel.RED
+                riskScore >= 0.5 -> com.protectalk.protectalk.data.model.dto.RiskLevel.YELLOW
+                else -> com.protectalk.protectalk.data.model.dto.RiskLevel.GREEN
             }
 
-            val result = AppModule.alertRepo.triggerAlert(message, severity)
+            val modelAnalysis = if (analysisPoints.isNotEmpty()) {
+                analysisPoints.joinToString("; ")
+            } else {
+                "Automated scam analysis completed"
+            }
+
+            val result = AppModule.alertRepo.triggerScamAlert(
+                callerNumber = phoneNumber,
+                modelScore = riskScore,
+                riskLevel = riskLevel,
+                transcript = filteredTranscript,
+                modelAnalysis = modelAnalysis,
+                durationInSeconds = 0 // We don't track call duration yet
+            )
 
             when (result) {
                 is com.protectalk.protectalk.data.model.ResultModel.Ok -> {
@@ -224,6 +236,19 @@ object AlertFlowManager {
 
         } catch (e: Exception) {
             Log.e(TAG, "💥 Error reporting scam alert to server", e)
+        }
+    }
+
+    // Temporary method to access OpenAI API key until BuildConfig is available
+    private fun getOpenAIApiKey(): String {
+        return try {
+            // Try to access BuildConfig via reflection
+            val buildConfigClass = Class.forName("com.protectalk.protectalk.BuildConfig")
+            val field = buildConfigClass.getDeclaredField("OPENAI_API_KEY")
+            field.get(null) as String
+        } catch (e: Exception) {
+            Log.w(TAG, "BuildConfig not available, returning empty API key")
+            ""
         }
     }
 }
