@@ -44,6 +44,8 @@ class ChatGPTAnalyzer(private val apiKey: String) {
         private const val SYSTEM_PROMPT = """
 You are an expert scam detection AI. Analyze the following phone call transcript and determine if it's a scam call.
 
+IMPORTANT: Respond ONLY with valid JSON. Do not use backticks, markdown formatting, or any text outside the JSON structure.
+
 Please provide:
 1. A scam probability score from 0.0 to 1.0 (where 1.0 = definitely a scam)
 2. A brief analysis explaining your reasoning
@@ -59,10 +61,10 @@ Consider these scam indicators:
 - Prize/lottery scams
 - Robocall patterns
 
-Respond in JSON format:
+Respond with this exact JSON structure (no backticks, no markdown):
 {
-  "scamScore": 0.0-1.0,
-  "analysis": "Brief explanation",
+  "scamScore": 0.0,
+  "analysis": "Brief explanation of your reasoning",
   "indicators": ["list", "of", "key", "indicators"],
   "riskLevel": "LOW|MEDIUM|HIGH|RED"
 }
@@ -123,10 +125,22 @@ Transcript to analyze:
             )
         }
 
+        // Clean the message content to remove markdown formatting and backticks
+        val cleanedContent = messageContent
+            .replace("```json", "")
+            .replace("```", "")
+            .replace("\\n", "")
+            .replace("\n", "")
+            .trim()
+
+        Log.d(LOG_TAG, "🧹 Cleaned content: $cleanedContent")
+
         val resultJson: JSONObject = try {
-            JSONObject(messageContent)
+            JSONObject(cleanedContent)
         } catch (e: Exception) {
             Log.e(LOG_TAG, "❌ Failed to parse GPT message as JSON: ${e.message}", e)
+            Log.e(LOG_TAG, "Original content: $messageContent")
+            Log.e(LOG_TAG, "Cleaned content: $cleanedContent")
             return@withContext ScamResult(
                 score = 0.0,
                 analysisPoints = listOf("⚠️ Could not parse GPT response.", "Raw content:", messageContent)
@@ -134,13 +148,19 @@ Transcript to analyze:
         }
 
         val scamScore: Double = resultJson.optDouble("scamScore", 0.0)
-        val analysisJsonArray: JSONArray = resultJson.optJSONArray("indicators") ?:
-                                          resultJson.optJSONArray("analysis") ?: JSONArray()
 
+        // Get the analysis field directly as requested
+        val analysis: String = resultJson.optString("analysis", "No analysis provided")
+
+        // Also get indicators as backup
+        val analysisJsonArray: JSONArray = resultJson.optJSONArray("indicators") ?: JSONArray()
         val bulletPoints: List<String> = List(analysisJsonArray.length()) { i ->
             analysisJsonArray.optString(i)
         }.take(MAX_ANALYSIS_POINTS)
 
-        ScamResult(score = scamScore, analysisPoints = bulletPoints)
+        ScamResult(
+            score = scamScore,
+            analysisPoints = if (analysis.isNotBlank()) listOf(analysis) else bulletPoints
+        )
     }
 }

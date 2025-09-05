@@ -5,6 +5,7 @@ import android.os.Build
 import android.util.Log
 import com.protectalk.protectalk.app.di.AppModule
 import com.protectalk.protectalk.alert.scam.*
+import com.protectalk.protectalk.data.model.ResultModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -26,13 +27,14 @@ object AlertFlowManager {
      *
      * @param context The application context
      * @param phoneNumber The phone number of the unknown caller
+     * @param callDurationSeconds The duration of the call in seconds
      */
-    fun handleUnknownCallEnded(context: Context, phoneNumber: String) {
-        Log.i(TAG, "🚨 Alert flow triggered for unknown number: $phoneNumber")
+    fun handleUnknownCallEnded(context: Context, phoneNumber: String, callDurationSeconds: Int = 0) {
+        Log.i(TAG, "🚨 Alert flow triggered for unknown number: $phoneNumber (duration: ${callDurationSeconds}s)")
 
         alertScope.launch {
             try {
-                processUnknownCallAlert(context, phoneNumber)
+                processUnknownCallAlert(context, phoneNumber, callDurationSeconds)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing unknown call alert", e)
                 ScamNotificationManager.dismissProcessingNotification(context)
@@ -51,7 +53,7 @@ object AlertFlowManager {
      * 7. If risk score > 0.8, send notification to user
      * Compatible with API level 24+
      */
-    private suspend fun processUnknownCallAlert(context: Context, phoneNumber: String) {
+    private suspend fun processUnknownCallAlert(context: Context, phoneNumber: String, callDurationSeconds: Int) {
         Log.d(TAG, "🔍 Starting scam detection pipeline for $phoneNumber")
 
         // Show processing notification
@@ -120,7 +122,8 @@ object AlertFlowManager {
                 phoneNumber = phoneNumber,
                 filteredTranscript = filteredTranscript,
                 riskScore = riskScore,
-                analysisPoints = scamResult.analysisPoints
+                analysisPoints = scamResult.analysisPoints,
+                callDurationSeconds = callDurationSeconds // Include call duration in report
             )
 
             // Step 7: Notify user based on threshold
@@ -185,7 +188,8 @@ object AlertFlowManager {
         phoneNumber: String,
         filteredTranscript: String,
         riskScore: Double,
-        analysisPoints: List<String>
+        analysisPoints: List<String>,
+        callDurationSeconds: Int = 0
     ) {
         try {
             val riskLevel = when {
@@ -194,8 +198,9 @@ object AlertFlowManager {
                 else -> com.protectalk.protectalk.data.model.dto.RiskLevel.GREEN
             }
 
+            // Use the analysis field directly as requested
             val modelAnalysis = if (analysisPoints.isNotEmpty()) {
-                analysisPoints.joinToString("; ")
+                analysisPoints.first() // Use the first element which is the analysis field
             } else {
                 "Automated scam analysis completed"
             }
@@ -206,14 +211,14 @@ object AlertFlowManager {
                 riskLevel = riskLevel,
                 transcript = filteredTranscript,
                 modelAnalysis = modelAnalysis,
-                durationInSeconds = 0 // We don't track call duration yet
+                durationInSeconds = callDurationSeconds
             )
 
             when (result) {
-                is com.protectalk.protectalk.data.model.ResultModel.Ok -> {
+                is ResultModel.Ok -> {
                     Log.i(TAG, "✅ Scam alert reported successfully to server")
                 }
-                is com.protectalk.protectalk.data.model.ResultModel.Err -> {
+                is ResultModel.Err -> {
                     Log.e(TAG, "❌ Failed to report scam alert: ${result.message}")
                 }
             }
