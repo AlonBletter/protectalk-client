@@ -58,43 +58,27 @@ object AlertFlowManager {
         ScamNotificationManager.showProcessingNotification(context, phoneNumber)
 
         try {
-            // Step 2: Find the latest call recording
-            Log.d(TAG, "📁 Step 2: Searching for latest call recording...")
-            val recordingFile = RecordingFinder.findLatestRecording()
+            // Step 2: Find and prepare the latest call recording
+            Log.d(TAG, "📁 Step 2: Finding and preparing latest call recording...")
+            val preparedWavFile = RecordingFinder.findAndPrepareLatestRecording(context)
 
-            if (recordingFile == null) {
-                Log.w(TAG, "❌ No call recording found")
+            if (preparedWavFile == null) {
+                Log.w(TAG, "❌ No call recording found or conversion failed")
                 reportBasicAlert(phoneNumber)
                 ScamNotificationManager.dismissProcessingNotification(context)
                 return
             }
 
-            Log.i(TAG, "✅ Found recording: ${recordingFile.name}")
+            Log.i(TAG, "✅ Recording prepared: ${preparedWavFile.name}")
 
-            // Convert audio if needed
-            Log.d(TAG, "🔄 Converting audio if needed...")
-            val processedFile = if (recordingFile.extension.lowercase() == "m4a") {
-                val wavFile = File(context.cacheDir, "converted_${System.currentTimeMillis()}.wav")
-                val success = AudioConverter.convertM4aToWav(recordingFile, wavFile)
-                if (!success) {
-                    Log.e(TAG, "❌ Failed to convert M4A to WAV")
-                    reportBasicAlert(phoneNumber)
-                    ScamNotificationManager.dismissProcessingNotification(context)
-                    return
-                }
-                wavFile
-            } else {
-                recordingFile
-            }
-
-            // Step 3: Transcribe the audio file
-            Log.d(TAG, "🎤 Step 3: Transcribing audio to text...")
+            // Step 3: Transcribe the prepared audio file
+            Log.d(TAG, "🎤 Step 3: Transcribing prepared WAV file...")
             val transcript = run {
                 val transcriber = Transcriber()
-                transcriber.transcribeFromLatestFile()
+                transcriber.transcribeWavFile(preparedWavFile)
             }
 
-            if (transcript.isBlank() || transcript.contains("No recording found") || transcript.contains("conversion failed")) {
+            if (transcript.isBlank() || transcript.contains("No recording found") || transcript.contains("conversion failed") || transcript.contains("WAV file not found")) {
                 Log.w(TAG, "❌ Transcription failed or empty: $transcript")
                 reportBasicAlert(phoneNumber)
                 ScamNotificationManager.dismissProcessingNotification(context)
@@ -158,10 +142,10 @@ object AlertFlowManager {
 
             ScamNotificationManager.dismissProcessingNotification(context)
 
-            // Clean up temporary files
-            if (processedFile != recordingFile) {
-                processedFile.delete()
-                Log.d(TAG, "🗑️ Cleaned up temporary converted file")
+            // Clean up the cached WAV file
+            if (preparedWavFile.exists()) {
+                preparedWavFile.delete()
+                Log.d(TAG, "🗑️ Cleaned up cached WAV file")
             }
 
         } catch (e: Exception) {

@@ -22,7 +22,7 @@ android {
 
     defaultConfig {
         //buildConfigField("String", "BASE_URL", "\"http://192.168.1.132:8080/\"")
-        buildConfigField("String", "BASE_URL", "\"http://vmedu428.mtacloud.co.il:8080/\"")
+        buildConfigField("String", "BASE_URL", "\"http://192.116.98.70:8080/\"")
         buildConfigField(
             "String",
             "GOOGLE_API_KEY",

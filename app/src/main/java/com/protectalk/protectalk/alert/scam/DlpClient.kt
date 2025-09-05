@@ -8,6 +8,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
 import org.json.JSONObject
 
 class DlpClient {
@@ -28,27 +29,31 @@ class DlpClient {
                 return@withContext text
             }
 
-            // Define what infoTypes to inspect
-            val inspectConfig = JSONObject().apply {
-                put("infoTypes", listOf(
-                    JSONObject().put("name", "PHONE_NUMBER"),
-                    JSONObject().put("name", "EMAIL_ADDRESS"),
-                    JSONObject().put("name", "CREDIT_CARD_NUMBER"),
-                    JSONObject().put("name", "PERSON_NAME"),
-                    JSONObject().put("name", "US_SOCIAL_SECURITY_NUMBER")
-                ))
+            // Define what infoTypes to inspect - using proper JSON arrays
+            val infoTypesArray = JSONArray().apply {
+                put(JSONObject().put("name", "PHONE_NUMBER"))
+                put(JSONObject().put("name", "EMAIL_ADDRESS"))
+                put(JSONObject().put("name", "CREDIT_CARD_NUMBER"))
+                put(JSONObject().put("name", "PERSON_NAME"))
+                put(JSONObject().put("name", "US_SOCIAL_SECURITY_NUMBER"))
             }
 
-            // Define how to mask sensitive data
+            val inspectConfig = JSONObject().apply {
+                put("infoTypes", infoTypesArray)
+            }
+
+            // Define how to mask sensitive data - using proper JSON arrays
+            val transformationsArray = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("primitiveTransformation", JSONObject().apply {
+                        put("replaceWithInfoTypeConfig", JSONObject())
+                    })
+                })
+            }
+
             val deidentifyConfig = JSONObject().apply {
                 put("infoTypeTransformations", JSONObject().apply {
-                    put("transformations", listOf(
-                        JSONObject().apply {
-                            put("primitiveTransformation", JSONObject().apply {
-                                put("replaceWithInfoTypeConfig", JSONObject())
-                            })
-                        }
-                    ))
+                    put("transformations", transformationsArray)
                 })
             }
 
@@ -62,22 +67,29 @@ class DlpClient {
             val requestBody = json.toString()
                 .toRequestBody("application/json".toMediaType())
 
+            Log.d("DlpClient", "Request body: ${json.toString()}")
+
             // REST endpoint
             val url = "https://dlp.googleapis.com/v2/projects/$projectId/locations/global/content:deidentify?key=$apiKey"
 
             val request = Request.Builder()
                 .url(url)
                 .post(requestBody)
+                .addHeader("Content-Type", "application/json")
                 .build()
 
             client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                Log.d("DlpClient", "Response code: ${response.code}")
+                Log.d("DlpClient", "Response body: $responseBody")
+
                 if (!response.isSuccessful) {
                     Log.e("DlpClient", "DLP error: ${response.code} ${response.message}")
+                    Log.e("DlpClient", "Error response body: $responseBody")
                     return@withContext text // Return original text if DLP fails
                 }
 
-                val body = response.body?.string()
-                val jsonResp = JSONObject(body ?: "{}")
+                val jsonResp = JSONObject(responseBody)
                 return@withContext jsonResp
                     .optJSONObject("item")
                     ?.optString("value") ?: text
