@@ -26,15 +26,13 @@ class CallStateReceiver : BroadcastReceiver() {
         }
 
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
-        val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
         val currentTime = System.currentTimeMillis()
 
         Log.d(TAG, "Phone state changed: $state (last state was $lastCallState)")
-        Log.d(TAG, "Incoming number from intent: $incomingNumber")
 
         when (state) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
-                onCallRinging(incomingNumber)
+                onCallRinging()
             }
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {
                 onCallAnswered()
@@ -57,9 +55,8 @@ class CallStateReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun onCallRinging(incomingNumber: String?) {
-        Log.d(TAG, "Call ringing from: $incomingNumber")
-        lastIncomingNumber = incomingNumber
+    private fun onCallRinging() {
+        Log.d(TAG, "Call ringing - will get number from call log when call ends")
         callStartTime = System.currentTimeMillis()
     }
 
@@ -71,21 +68,14 @@ class CallStateReceiver : BroadcastReceiver() {
     }
 
     private fun onCallEnded(context: Context) {
-        Log.d(TAG, "Call ended - last incoming number was: $lastIncomingNumber")
+        Log.d(TAG, "Call ended - checking call log for recent call")
 
         // Only process if we had a call (not just going from offhook to idle)
         if (lastCallState == TelephonyManager.CALL_STATE_RINGING ||
             lastCallState == TelephonyManager.CALL_STATE_OFFHOOK) {
 
-            val phoneNumber = if (!lastIncomingNumber.isNullOrBlank()) {
-                // Use the number we captured during ringing
-                Log.d(TAG, "Using captured incoming number: $lastIncomingNumber")
-                lastIncomingNumber!!
-            } else {
-                // Fallback to call log lookup with time-based filtering
-                Log.d(TAG, "No captured number, falling back to call log lookup")
-                getRecentCallNumberWithTimeFilter(context)
-            }
+            // Always use call log lookup since EXTRA_INCOMING_NUMBER is deprecated
+            val phoneNumber = getRecentCallNumberWithTimeFilter(context)
 
             phoneNumber?.let { number ->
                 handleIncomingCallEnded(context, number)

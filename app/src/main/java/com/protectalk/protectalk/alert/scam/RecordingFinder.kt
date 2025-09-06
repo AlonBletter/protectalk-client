@@ -129,7 +129,6 @@ object RecordingFinder {
      * with the last call time within a 60-second delta.
      * Uses the same logic as findAndPrepareLatestRecording to ensure consistency.
      *
-     * @param context The application context for accessing call log
      * @param lastCallStartTime The start time of the last call in milliseconds (System.currentTimeMillis())
      * @return True if call recording appears to be working, false otherwise
      */

@@ -3,7 +3,6 @@ package com.protectalk.protectalk.permissions
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
@@ -11,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 
 /**
  * Manages all runtime permissions required for scam detection functionality.
@@ -82,19 +82,6 @@ class PermissionManager(private val activity: ComponentActivity) {
                 ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
             }
             Log.d(TAG, "Audio permissions check: $result")
-            return result
-        }
-
-        /**
-         * Checks if all permissions are granted
-         */
-        fun checkAllPermissions(context: android.content.Context): Boolean {
-            val regularPermissions = ESSENTIAL_PERMISSIONS + AUDIO_PERMISSIONS + ENHANCED_PERMISSIONS
-            val systemAlert = Settings.canDrawOverlays(context)
-            val result = regularPermissions.all { permission ->
-                ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-            } && systemAlert
-            Log.d(TAG, "All permissions check: $result")
             return result
         }
 
@@ -227,7 +214,7 @@ class PermissionManager(private val activity: ComponentActivity) {
             Log.d(TAG, "Requesting system alert window permission")
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:${activity.packageName}")
+                "package:${activity.packageName}".toUri()
             )
             systemAlertPermissionLauncher.launch(intent)
         } else {
