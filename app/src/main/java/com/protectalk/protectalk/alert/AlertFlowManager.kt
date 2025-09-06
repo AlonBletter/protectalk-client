@@ -1,153 +1,243 @@
 package com.protectalk.protectalk.alert
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
+import com.protectalk.protectalk.app.di.AppModule
+import com.protectalk.protectalk.alert.scam.*
+import com.protectalk.protectalk.data.model.ResultModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
 
 object AlertFlowManager {
 
     private const val TAG = "AlertFlowManager"
+    private const val SCAM_THRESHOLD = 0.8 // 80% scam probability threshold (0.0-1.0 scale)
 
     // Coroutine scope for background operations
     private val alertScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     /**
      * Handles the alert flow when a call from an unknown number ends
-     * This is the main entry point for the alert system
+     * This is the main entry point for the scam detection system
+     * Compatible with API level 24+
      *
      * @param context The application context
      * @param phoneNumber The phone number of the unknown caller
+     * @param callDurationSeconds The duration of the call in seconds
      */
-    fun handleUnknownCallEnded(context: Context, phoneNumber: String) {
-        Log.i(TAG, "Alert flow triggered for unknown number: $phoneNumber")
+    fun handleUnknownCallEnded(context: Context, phoneNumber: String, callDurationSeconds: Int = 0) {
+        Log.i(TAG, "🚨 Alert flow triggered for unknown number: $phoneNumber (duration: ${callDurationSeconds}s)")
 
         alertScope.launch {
             try {
-                // This is where the main alert logic will be implemented
-                processUnknownCallAlert(context, phoneNumber)
+                processUnknownCallAlert(context, phoneNumber, callDurationSeconds)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing unknown call alert", e)
+                ScamNotificationManager.dismissProcessingNotification(context)
             }
         }
     }
 
     /**
-     * Processes the alert for an unknown call
-     * TODO: Implement the actual alert flow logic here
+     * Complete scam detection pipeline following the specified flow:
+     * 1. App triggered when unknown caller call ends
+     * 2. Locate audio file of the call
+     * 3. Transcribe the audio file
+     * 4. Filter sensitive information using DLP
+     * 5. Send filtered transcription to OpenAI for analysis
+     * 6. Report to server with analysis and score
+     * 7. If risk score > 0.8, send notification to user
+     * Compatible with API level 24+
      */
-    private suspend fun processUnknownCallAlert(context: Context, phoneNumber: String) {
-        Log.d(TAG, "Processing alert for unknown call from: $phoneNumber")
+    private suspend fun processUnknownCallAlert(context: Context, phoneNumber: String, callDurationSeconds: Int) {
+        Log.d(TAG, "🔍 Starting scam detection pipeline for $phoneNumber")
 
-        // TODO: Add your alert flow implementation here
-        // This could include:
-        // 1. Checking if user needs protection (based on app state/settings)
-        // 2. Sending alert to trusted contacts
-        // 3. Reporting to server
-        // 4. Showing emergency UI
-        // 5. Location sharing
-        // 6. Recording incident details
+        // Show processing notification
+        ScamNotificationManager.showProcessingNotification(context, phoneNumber)
 
-        // Placeholder for now - just log the event
-        logUnknownCallEvent(phoneNumber)
+        try {
+            // Step 2: Find and prepare the latest call recording
+            Log.d(TAG, "📁 Step 2: Finding and preparing latest call recording...")
+            val preparedWavFile = RecordingFinder.findAndPrepareLatestRecording(context)
 
-        // TODO: Determine if this warrants an immediate alert
-        val shouldTriggerAlert = shouldTriggerAlertForCall(phoneNumber)
+            if (preparedWavFile == null) {
+                Log.w(TAG, "❌ No call recording found or conversion failed")
+                reportBasicAlert(phoneNumber)
+                ScamNotificationManager.dismissProcessingNotification(context)
+                return
+            }
 
-        if (shouldTriggerAlert) {
-            Log.i(TAG, "Triggering protection alert for call from: $phoneNumber")
-            triggerProtectionAlert(context, phoneNumber)
-        } else {
-            Log.d(TAG, "No alert needed for call from: $phoneNumber")
+            Log.i(TAG, "✅ Recording prepared: ${preparedWavFile.name}")
+
+            // Step 3: Transcribe the prepared audio file
+            Log.d(TAG, "🎤 Step 3: Transcribing prepared WAV file...")
+            val transcript = run {
+                val transcriber = Transcriber()
+                transcriber.transcribeWavFile(preparedWavFile)
+            }
+
+            if (transcript.isBlank() || transcript.contains("No recording found") || transcript.contains("conversion failed") || transcript.contains("WAV file not found")) {
+                Log.w(TAG, "❌ Transcription failed or empty: $transcript")
+                reportBasicAlert(phoneNumber)
+                ScamNotificationManager.dismissProcessingNotification(context)
+                return
+            }
+
+            Log.i(TAG, "✅ Transcription successful: \"${transcript.take(100)}...\"")
+
+            // Step 4: Filter sensitive information using DLP
+            Log.d(TAG, "🔒 Step 4: Filtering sensitive information using DLP...")
+            val filteredTranscript = run {
+                val dlpClient = DlpClient()
+                dlpClient.deidentifyText(transcript) ?: transcript // Use original if DLP fails
+            }
+
+            Log.i(TAG, "✅ DLP filtering complete")
+
+            // Step 5: Analyze for scam using OpenAI
+            Log.d(TAG, "🧠 Step 5: Analyzing filtered transcript for scam indicators...")
+            val openaiApiKey = getOpenAIApiKey()
+            if (openaiApiKey.isBlank()) {
+                Log.e(TAG, "❌ OpenAI API key not configured")
+                reportBasicAlert(phoneNumber)
+                ScamNotificationManager.dismissProcessingNotification(context)
+                return
+            }
+
+            val analyzer = ChatGPTAnalyzer(openaiApiKey)
+            val scamResult = analyzer.analyze(filteredTranscript)
+
+            // Keep the score as 0-1.0 scale (don't change it as user requested)
+            val riskScore = scamResult.score
+
+            Log.i(TAG, "✅ Analysis complete: ${(scamResult.score * 100).toInt()}% scam probability")
+
+            // Step 6: Report to server using triggerAlert endpoint
+            Log.d(TAG, "📡 Step 6: Reporting to server...")
+            reportScamAlert(
+                phoneNumber = phoneNumber,
+                filteredTranscript = filteredTranscript,
+                riskScore = riskScore,
+                analysisPoints = scamResult.analysisPoints,
+                callDurationSeconds = callDurationSeconds // Include call duration in report
+            )
+
+            // Step 7: Notify user based on threshold
+            if (riskScore >= SCAM_THRESHOLD) {
+                Log.w(TAG, "🚨 SCAM DETECTED! Risk score: ${(riskScore * 100).toInt()}%")
+
+                ScamNotificationManager.showScamAlert(
+                    context = context,
+                    callerNumber = phoneNumber,
+                    scamScore = riskScore,
+                    analysis = scamResult.analysisPoints.joinToString("; ")
+                )
+            } else {
+                Log.i(TAG, "✅ Call appears legitimate (score: ${(riskScore * 100).toInt()}%)")
+
+                // Show safe call notification like ProtecTalkService did
+                ScamNotificationManager.showSafeCallNotification(context)
+            }
+
+            ScamNotificationManager.dismissProcessingNotification(context)
+
+            // Clean up the cached WAV file
+            if (preparedWavFile.exists()) {
+                preparedWavFile.delete()
+                Log.d(TAG, "🗑️ Cleaned up cached WAV file")
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "💥 Error in scam detection pipeline", e)
+            ScamNotificationManager.dismissProcessingNotification(context)
         }
     }
 
     /**
-     * Determines if a call from this number should trigger an alert
-     * TODO: Implement logic based on user settings, frequency, etc.
+     * Reports a basic alert when full analysis isn't possible
      */
-    private fun shouldTriggerAlertForCall(phoneNumber: String): Boolean {
-        // Placeholder logic - you can implement sophisticated rules here
-        // For example:
-        // - Check user's current protection status
-        // - Check if multiple unknown calls in short time
-        // - Check time of day
-        // - Check user's location
-        // - Check if user has active protection requests
+    private suspend fun reportBasicAlert(phoneNumber: String) {
+        try {
+            val message = "Unknown call received from: $phoneNumber"
+            val severity = "info"
 
-        Log.d(TAG, "Evaluating if alert should be triggered for: $phoneNumber")
+            val result = AppModule.alertRepo.triggerAlert(message, severity)
 
-        // For now, always return true for unknown calls
-        // You can modify this logic based on your requirements
-        return true
+            when (result) {
+                is com.protectalk.protectalk.data.model.ResultModel.Ok -> {
+                    Log.i(TAG, "✅ Basic alert reported successfully to server")
+                }
+                is com.protectalk.protectalk.data.model.ResultModel.Err -> {
+                    Log.e(TAG, "❌ Failed to report basic alert: ${result.message}")
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "💥 Error reporting basic alert to server", e)
+        }
     }
 
     /**
-     * Triggers the actual protection alert
-     * TODO: Implement the alert mechanisms
+     * Reports scam analysis to the server using triggerScamAlert endpoint with filtered transcript
      */
-    private suspend fun triggerProtectionAlert(context: Context, phoneNumber: String) {
-        Log.i(TAG, "PROTECTION ALERT TRIGGERED for unknown call from: $phoneNumber")
+    private suspend fun reportScamAlert(
+        phoneNumber: String,
+        filteredTranscript: String,
+        riskScore: Double,
+        analysisPoints: List<String>,
+        callDurationSeconds: Int = 0
+    ) {
+        try {
+            val riskLevel = when {
+                riskScore >= 0.8 -> com.protectalk.protectalk.data.model.dto.RiskLevel.RED
+                riskScore >= 0.5 -> com.protectalk.protectalk.data.model.dto.RiskLevel.YELLOW
+                else -> com.protectalk.protectalk.data.model.dto.RiskLevel.GREEN
+            }
 
-        // TODO: Implement alert mechanisms:
-        // 1. Send notifications to trusted contacts
-        // 2. Send location data
-        // 3. Report to server
-        // 4. Show emergency UI
-        // 5. Start recording/logging
+            // Use the analysis field directly as requested
+            val modelAnalysis = if (analysisPoints.isNotEmpty()) {
+                analysisPoints.first() // Use the first element which is the analysis field
+            } else {
+                "Automated scam analysis completed"
+            }
 
-        // Placeholder implementations:
-        notifyTrustedContacts(phoneNumber)
-        reportToServer(phoneNumber)
-        showEmergencyNotification(context, phoneNumber)
+            val result = AppModule.alertRepo.triggerScamAlert(
+                callerNumber = phoneNumber,
+                modelScore = riskScore,
+                riskLevel = riskLevel,
+                transcript = filteredTranscript,
+                modelAnalysis = modelAnalysis,
+                durationInSeconds = callDurationSeconds
+            )
+
+            when (result) {
+                is ResultModel.Ok -> {
+                    Log.i(TAG, "✅ Scam alert reported successfully to server")
+                }
+                is ResultModel.Err -> {
+                    Log.e(TAG, "❌ Failed to report scam alert: ${result.message}")
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "💥 Error reporting scam alert to server", e)
+        }
     }
 
-    /**
-     * Logs the unknown call event for analytics/debugging
-     */
-    private fun logUnknownCallEvent(phoneNumber: String) {
-        val timestamp = System.currentTimeMillis()
-        Log.i(TAG, "UNKNOWN_CALL_EVENT: number=$phoneNumber, timestamp=$timestamp")
-
-        // TODO: Store this event in local database for later analysis
-        // TODO: Add to analytics/crash reporting
-    }
-
-    /**
-     * Placeholder for notifying trusted contacts
-     * TODO: Implement actual notification logic
-     */
-    private suspend fun notifyTrustedContacts(phoneNumber: String) {
-        Log.d(TAG, "TODO: Notify trusted contacts about unknown call from: $phoneNumber")
-
-        // TODO: Get user's trusted contacts from the protection system
-        // TODO: Send push notifications to trusted contacts
-        // TODO: Send SMS/call trusted contacts if configured
-    }
-
-    /**
-     * Placeholder for reporting to server
-     * TODO: Implement server reporting logic
-     */
-    private suspend fun reportToServer(phoneNumber: String) {
-        Log.d(TAG, "TODO: Report unknown call incident to server: $phoneNumber")
-
-        // TODO: Send incident report to your backend
-        // TODO: Include user location, timestamp, call details
-        // TODO: Handle server response and follow-up actions
-    }
-
-    /**
-     * Placeholder for showing emergency notification
-     * TODO: Implement emergency UI notification
-     */
-    private fun showEmergencyNotification(context: Context, phoneNumber: String) {
-        Log.d(TAG, "TODO: Show emergency notification for unknown call: $phoneNumber")
-
-        // TODO: Show high-priority notification
-        // TODO: Possibly show full-screen emergency activity
-        // TODO: Provide quick actions (I'm safe, Need help, etc.)
+    // Temporary method to access OpenAI API key until BuildConfig is available
+    private fun getOpenAIApiKey(): String {
+        return try {
+            // Try to access BuildConfig via reflection
+            val buildConfigClass = Class.forName("com.protectalk.protectalk.BuildConfig")
+            val field = buildConfigClass.getDeclaredField("OPENAI_API_KEY")
+            field.get(null) as String
+        } catch (e: Exception) {
+            Log.w(TAG, "BuildConfig not available, returning empty API key")
+            ""
+        }
     }
 }

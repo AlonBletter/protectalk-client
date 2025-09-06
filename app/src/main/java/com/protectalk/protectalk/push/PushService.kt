@@ -3,7 +3,6 @@ package com.protectalk.protectalk.push
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
@@ -16,7 +15,6 @@ import com.protectalk.protectalk.R
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.protectalk.protectalk.push.FcmTokenUploadWorker
 
 class PushService : FirebaseMessagingService() {
 
@@ -80,20 +78,9 @@ class PushService : FirebaseMessagingService() {
     private fun handleContactRequestReceived(message: RemoteMessage) {
         Log.d(TAG, "Handling contact request received notification")
 
-        val senderName = message.data["requesterName"] ?: "Someone"
-        val requestType = message.data["contactType"] ?: "TRUSTED"
-
-        val title = when (requestType) {
-            "TRUSTED_CONTACT", "TRUSTED" -> "Protection Request"
-            "PROTEGEE" -> "Protection Offer"
-            else -> "Contact Request"
-        }
-
-        val body = when (requestType) {
-            "TRUSTED_CONTACT", "TRUSTED" -> "$senderName wants you to be their trusted contact"
-            "PROTEGEE" -> "$senderName wants to be your protegee"
-            else -> "$senderName sent you a contact request"
-        }
+        // Use server-provided title and body instead of composing locally
+        val title = message.data["title"] ?: message.notification?.title ?: "Contact Request"
+        val body = message.data["body"] ?: message.notification?.body ?: "You have a new contact request"
 
         showNotification(
             title = title,
@@ -105,17 +92,9 @@ class PushService : FirebaseMessagingService() {
     private fun handleContactRequestApproved(message: RemoteMessage) {
         Log.d(TAG, "Handling contact request approved notification")
 
-        val approvingUserName = message.data["approvingUserName"] ?: "Someone"
-        val contactType = message.data["contactType"] ?: "TRUSTED_CONTACT"
-
-        val contactTypeDisplay = when (contactType) {
-            "TRUSTED_CONTACT" -> "trusted contact"
-            "PROTEGEE" -> "protegee"
-            else -> "contact"
-        }
-
-        val title = "Request Approved ✅"
-        val body = "$approvingUserName accepted your $contactTypeDisplay request"
+        // Use server-provided title and body instead of composing locally
+        val title = message.data["title"] ?: message.notification?.title ?: "Request Approved"
+        val body = message.data["body"] ?: message.notification?.body ?: "Your request was approved"
 
         showNotification(
             title = title,
@@ -127,17 +106,9 @@ class PushService : FirebaseMessagingService() {
     private fun handleContactRequestDenied(message: RemoteMessage) {
         Log.d(TAG, "Handling contact request denied notification")
 
-        val denyingUserName = message.data["denyingUserName"] ?: "Someone"
-        val contactType = message.data["contactType"] ?: "TRUSTED_CONTACT"
-
-        val contactTypeDisplay = when (contactType) {
-            "TRUSTED_CONTACT" -> "trusted contact"
-            "PROTEGEE" -> "protegee"
-            else -> "contact"
-        }
-
-        val title = "Request Denied ❌"
-        val body = "$denyingUserName denied your $contactTypeDisplay request"
+        // Use server-provided title and body instead of composing locally
+        val title = message.data["title"] ?: message.notification?.title ?: "Request Denied"
+        val body = message.data["body"] ?: message.notification?.body ?: "Your request was denied"
 
         showNotification(
             title = title,
@@ -149,11 +120,9 @@ class PushService : FirebaseMessagingService() {
     private fun handleProtectionAlert(message: RemoteMessage) {
         Log.d(TAG, "Handling protection alert notification")
 
-        val alerterName = message.data["alerterName"] ?: "Someone"
-        val alertType = message.data["alertType"] ?: "EMERGENCY"
-
-        val title = "🚨 Emergency Alert"
-        val body = "$alerterName needs immediate help!"
+        // Use server-provided title and body instead of composing locally
+        val title = message.data["title"] ?: message.notification?.title ?: "🚨 Emergency Alert"
+        val body = message.data["body"] ?: message.notification?.body ?: "Emergency assistance needed"
 
         showNotification(
             title = title,
@@ -166,11 +135,9 @@ class PushService : FirebaseMessagingService() {
     private fun handleContactResponse(message: RemoteMessage) {
         Log.d(TAG, "Handling contact response notification")
 
-        val responderName = message.data["responderName"] ?: "Someone"
-        val response = message.data["response"] ?: "responded"
-
-        val title = "Contact Request Response"
-        val body = "$responderName $response your request"
+        // Use server-provided title and body instead of composing locally
+        val title = message.data["title"] ?: message.notification?.title ?: "Contact Request Response"
+        val body = message.data["body"] ?: message.notification?.body ?: "Someone responded to your request"
 
         showNotification(
             title = title,
@@ -232,7 +199,7 @@ class PushService : FirebaseMessagingService() {
                 .setVibrate(longArrayOf(0, 1000, 500, 1000))
         }
 
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
     }
 
@@ -243,7 +210,7 @@ class PushService : FirebaseMessagingService() {
                 description = CHANNEL_DESCRIPTION
             }
 
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
     }

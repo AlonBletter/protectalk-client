@@ -1,8 +1,19 @@
+import java.io.FileInputStream
+import java.util.Properties
+import kotlin.apply
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services) // applies the Google Services plugin
+}
+
+val localProps = Properties().apply {
+    val propsFile = rootProject.file("local.properties")
+    if (propsFile.exists()) {
+        FileInputStream(propsFile).use { load(it) }
+    }
 }
 
 android {
@@ -11,7 +22,22 @@ android {
 
     defaultConfig {
         //buildConfigField("String", "BASE_URL", "\"http://192.168.1.132:8080/\"")
-        buildConfigField("String", "BASE_URL", "\"http://vmedu428.mtacloud.co.il:8080/\"")
+        buildConfigField("String", "BASE_URL", "\"http://192.116.98.70:8080/\"")
+        buildConfigField(
+            "String",
+            "GOOGLE_API_KEY",
+            "\"${localProps.getProperty("google_api_key", "")}\""
+        )
+        buildConfigField(
+            "String",
+            "GOOGLE_PROJECT_ID",
+            "\"${localProps.getProperty("google_project_id", "protectalk")}\""
+        )
+        buildConfigField(
+            "String",
+            "OPENAI_API_KEY",
+            "\"${localProps.getProperty("openai_api_key", "")}\""
+        )
         applicationId = "com.protectalk.protectalk"
         minSdk = 24
         targetSdk = 36
@@ -20,6 +46,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
 
     buildTypes {
         release {
@@ -67,7 +94,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-// Coroutines + Tasks
+    // Coroutines + Tasks
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 

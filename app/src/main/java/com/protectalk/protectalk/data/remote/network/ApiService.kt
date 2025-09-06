@@ -21,7 +21,7 @@ interface ApiService {
     @POST("api/users/complete-registration")
     suspend fun completeRegistration(@Body body: CompleteRegistrationRequest): Response<Unit>
 
-    @POST("api/v1/alerts")
+    @POST("api/alerts/report")
     suspend fun triggerAlert(@Body body: TriggerAlertRequest): Response<Unit>
 
     @POST("api/users/contact-request")
@@ -44,5 +44,4 @@ interface ApiService {
 
     @POST("api/users/requests/{requestId}/cancel")
     suspend fun cancelRequest(@Path("requestId") requestId: String): Response<Unit>
-
 }

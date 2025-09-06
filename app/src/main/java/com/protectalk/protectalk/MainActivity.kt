@@ -1,72 +1,38 @@
 package com.protectalk.protectalk
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
 import com.protectalk.protectalk.navigation.AppNavHost
+import com.protectalk.protectalk.permissions.PermissionManager
 import com.protectalk.protectalk.push.PushManager
 import com.protectalk.protectalk.alert.AlertManager
+import com.protectalk.protectalk.ui.theme.ProtectTalkTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            Log.d("MainActivity", "Notification permission granted")
-        } else {
-            Log.w("MainActivity", "Notification permission denied")
-        }
-    }
-
-    private val requestAlertPermissionsLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val grantedPermissions = permissions.filterValues { it }.keys
-        val deniedPermissions = permissions.filterValues { !it }.keys
-
-        Log.d("MainActivity", "Alert permissions granted: $grantedPermissions")
-        Log.d("MainActivity", "Alert permissions denied: $deniedPermissions")
-
-        // Check if we have the essential permissions needed for the current Android version
-        val hasEssentialPermissions = AlertManager.hasRequiredPermissions(this)
-        val missingCritical = AlertManager.getMissingPermissions(this)
-
-        if (hasEssentialPermissions) {
-            Log.i("MainActivity", "All required alert permissions granted for API ${android.os.Build.VERSION.SDK_INT}, starting monitoring")
-            AlertManager.startAlertMonitoring(this)
-        } else {
-            Log.w("MainActivity", "Missing critical permissions: $missingCritical - alert monitoring cannot start")
-            // You might want to show a dialog explaining why these permissions are needed
-        }
-    }
+    private lateinit var permissionManager: PermissionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // Initialize permission manager for comprehensive permission handling
+        permissionManager = PermissionManager(this)
+
         // Initialize FCM token early in app lifecycle
         initializeFcmToken()
 
-        // Request notification permission for Android 13+
-        requestNotificationPermission()
-
-        // Request alert monitoring permissions
-        requestAlertPermissions()
+        // Request all necessary permissions for scam detection functionality
+        requestAllPermissions()
 
         setContent {
-            MaterialTheme { // default Material3 theme is fine for now
+            ProtectTalkTheme { // Custom light green theme
                 Surface {
                     val navController = rememberNavController()
                     AppNavHost(navController)
@@ -86,33 +52,53 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            when {
-                ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED -> {
-                    Log.d("MainActivity", "Notification permission already granted")
+    /**
+     * Request all permissions required for scam detection functionality
+     * This includes essential, audio processing, and enhanced permissions
+     */
+    private fun requestAllPermissions() {
+        Log.d("MainActivity", "Starting comprehensive permission request for scam detection")
+
+        // Log current permission status for debugging
+        val currentStatus = permissionManager.getPermissionStatus()
+        Log.d("MainActivity", "Current permission status: $currentStatus")
+
+        permissionManager.requestAllPermissions { allCriticalGranted ->
+            if (allCriticalGranted) {
+                Log.i("MainActivity", "✅ All critical permissions granted - scam detection fully enabled")
+
+                // Start alert monitoring with full functionality
+                AlertManager.startAlertMonitoring(this)
+
+                // Log final permission status
+                val finalStatus = permissionManager.getPermissionStatus()
+                Log.d("MainActivity", "Final permission status: $finalStatus")
+
+            } else {
+                Log.w("MainActivity", "⚠️ Some critical permissions denied - limited functionality")
+
+                // Still try to start monitoring with available permissions
+                if (permissionManager.checkEssentialPermissions()) {
+                    Log.i("MainActivity", "Starting limited alert monitoring with essential permissions only")
+                    AlertManager.startAlertMonitoring(this)
+                } else {
+                    Log.e("MainActivity", "❌ Essential permissions missing - cannot start alert monitoring")
                 }
-                else -> {
-                    Log.d("MainActivity", "Requesting notification permission")
-                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                }
+
+                // Show which permissions are missing
+                val finalStatus = permissionManager.getPermissionStatus()
+                Log.w("MainActivity", "Missing permissions status: $finalStatus")
             }
         }
     }
 
-    private fun requestAlertPermissions() {
-        val missingPermissions = AlertManager.getMissingPermissions(this)
+    override fun onResume() {
+        super.onResume()
 
-        if (missingPermissions.isEmpty()) {
-            Log.d("MainActivity", "All alert permissions already granted")
-            // Start monitoring if permissions are already granted
+        // Check if permissions have changed (user might have granted them in settings)
+        if (permissionManager.checkEssentialPermissions()) {
+            Log.d("MainActivity", "Essential permissions available - ensuring monitoring is active")
             AlertManager.startAlertMonitoring(this)
-        } else {
-            Log.d("MainActivity", "Requesting alert permissions: $missingPermissions")
-            requestAlertPermissionsLauncher.launch(AlertManager.getRequiredPermissions())
         }
     }
 

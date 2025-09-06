@@ -1,5 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Light Green Theme for Compose -->
+    <style name="Theme.Protectalkclient" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Primary colors (for system UI) -->
+        <item name="android:colorPrimary">@color/light_green_500</item>
+        <item name="android:colorPrimaryDark">@color/light_green_700</item>
+        <item name="android:colorAccent">@color/green_accent_200</item>
 
-    <style name="Theme.Protectalkclient" parent="android:Theme.Material.Light.NoActionBar" />
+        <!-- Background colors -->
+        <item name="android:colorBackground">@color/light_green_50</item>
+        <item name="android:windowBackground">@color/light_green_50</item>
+
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@color/light_green_700</item>
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Navigation bar -->
+        <item name="android:navigationBarColor">@color/light_green_500</item>
+    </style>
 </resources>
