@@ -63,20 +63,6 @@ class PermissionManager(private val activity: ComponentActivity) {
         }
 
         /**
-         * Gets audio permissions needed for scam detection
-         */
-        fun getAudioPermissions(): Array<String> {
-            return AUDIO_PERMISSIONS.toTypedArray()
-        }
-
-        /**
-         * Gets all required permissions for full functionality
-         */
-        fun getAllRequiredPermissions(): Array<String> {
-            return (ESSENTIAL_PERMISSIONS + AUDIO_PERMISSIONS + ENHANCED_PERMISSIONS).toTypedArray()
-        }
-
-        /**
          * Checks if essential permissions are granted (for basic monitoring)
          * This is what AlertManager should use
          */
@@ -130,27 +116,6 @@ class PermissionManager(private val activity: ComponentActivity) {
             }
         }
 
-        /**
-         * Gets all missing permissions
-         */
-        fun getAllMissingPermissions(context: android.content.Context): List<String> {
-            val allPermissions = ESSENTIAL_PERMISSIONS + AUDIO_PERMISSIONS + ENHANCED_PERMISSIONS
-            return allPermissions.filter { permission ->
-                ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED
-            }
-        }
-
-        /**
-         * Get permission status summary for debugging (centralized version)
-         */
-        fun getPermissionStatusStatic(context: android.content.Context): Map<String, Boolean> {
-            return mapOf(
-                "Essential" to checkEssentialPermissions(context),
-                "Audio" to checkAudioPermissions(context),
-                "SystemAlert" to Settings.canDrawOverlays(context),
-                "AllGranted" to checkAllPermissions(context)
-            )
-        }
     }
 
     private var onPermissionResult: ((Boolean) -> Unit)? = null

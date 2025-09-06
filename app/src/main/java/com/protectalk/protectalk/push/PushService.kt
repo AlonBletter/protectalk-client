@@ -16,7 +16,6 @@ import com.protectalk.protectalk.R
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.protectalk.protectalk.push.FcmTokenUploadWorker
 
 class PushService : FirebaseMessagingService() {
 
@@ -201,7 +200,7 @@ class PushService : FirebaseMessagingService() {
                 .setVibrate(longArrayOf(0, 1000, 500, 1000))
         }
 
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.notify(System.currentTimeMillis().toInt(), notificationBuilder.build())
     }
 
@@ -212,7 +211,7 @@ class PushService : FirebaseMessagingService() {
                 description = CHANNEL_DESCRIPTION
             }
 
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
     }

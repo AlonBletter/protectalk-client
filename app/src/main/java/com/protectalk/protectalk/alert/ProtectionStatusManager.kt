@@ -158,7 +158,7 @@ object ProtectionStatusManager {
             }
 
             // Use RecordingFinder to check if recording is working
-            return RecordingFinder.isCallRecordingWorking(context, lastCallTime)
+            return RecordingFinder.isCallRecordingWorking(lastCallTime)
 
         } catch (e: SecurityException) {
             Log.w(TAG, "❌ Cannot check call recording due to permission denial: ${e.message}")
@@ -204,22 +204,6 @@ object ProtectionStatusManager {
             return null
         } finally {
             cursor?.close()
-        }
-    }
-
-    /**
-     * Quick check method that only verifies permissions (lighter operation).
-     * Useful for frequent status checks without the overhead of recording verification.
-     *
-     * @param context The application context
-     * @return True if all essential permissions are granted
-     */
-    fun arePermissionsGranted(context: Context): Boolean {
-        return try {
-            PermissionManager.checkEssentialPermissions(context)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking permissions: ${e.message}", e)
-            false
         }
     }
 }

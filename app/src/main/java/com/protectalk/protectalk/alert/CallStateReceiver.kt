@@ -7,9 +7,6 @@ import android.database.Cursor
 import android.provider.CallLog
 import android.telephony.TelephonyManager
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 
 class CallStateReceiver : BroadcastReceiver() {
 

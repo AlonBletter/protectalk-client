@@ -133,7 +133,7 @@ object RecordingFinder {
      * @param lastCallStartTime The start time of the last call in milliseconds (System.currentTimeMillis())
      * @return True if call recording appears to be working, false otherwise
      */
-    fun isCallRecordingWorking(context: Context, lastCallStartTime: Long): Boolean {
+    fun isCallRecordingWorking(lastCallStartTime: Long): Boolean {
         Log.d(LOG_TAG, "🔍 Checking if call recording is working...")
 
         // Use the same logic as findAndPrepareLatestRecording to find the recording
@@ -209,7 +209,7 @@ object RecordingFinder {
                         13 -> timestampStr.toLong() // Already in milliseconds
                         else -> null
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     Log.w(LOG_TAG, "Failed to parse timestamp from filename: ${match.value}")
                     null
                 }
