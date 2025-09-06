@@ -57,8 +57,10 @@ fun HomeScreen() {
                 // Handle error by showing a fallback status
                 protectionStatus = ProtectionStatusManager.ProtectionStatus(
                     allPermissionsGranted = false,
-                    callRecordingEnabled = false,
-                    statusMessage = "❌ Unable to check protection status"
+                    callRecordingStatus = ProtectionStatusManager.CallRecordingStatus.CANNOT_CHECK,
+                    isFullyProtected = false,
+                    statusMessage = "Protection disabled",
+                    detailMessage = "Unable to check protection status"
                 )
             } finally {
                 isCheckingStatus = false
@@ -115,16 +117,12 @@ fun HomeScreen() {
                             )
                         } else {
                             protectionStatus?.let { status ->
-                                // Status indicator
+                                // Binary status indicator - green for ON, red for OFF
                                 Box(
                                     modifier = Modifier
                                         .size(12.dp)
                                         .background(
-                                            color = when {
-                                                status.isFullyProtected -> Color(0xFF4CAF50)
-                                                status.allPermissionsGranted || status.callRecordingEnabled -> Color(0xFFFF9800)
-                                                else -> Color(0xFFF44336)
-                                            },
+                                            color = if (status.isFullyProtected) Color(0xFF4CAF50) else Color(0xFFF44336),
                                             shape = androidx.compose.foundation.shape.CircleShape
                                         )
                                 )
@@ -142,42 +140,50 @@ fun HomeScreen() {
                         )
                     } else {
                         protectionStatus?.let { status ->
-                            // Main status message (cleaned up)
-                            val cleanStatusMessage = when {
-                                status.isFullyProtected -> "Full protection active"
-                                status.allPermissionsGranted && !status.callRecordingEnabled -> "Partial protection - Call recording issue"
-                                !status.allPermissionsGranted && status.callRecordingEnabled -> "Partial protection - Missing permissions"
-                                else -> "Protection disabled"
-                            }
-
+                            // Binary status message - either ON or OFF
                             Text(
-                                cleanStatusMessage,
-                                color = when {
-                                    status.isFullyProtected -> Color(0xFF2E7D32)
-                                    status.allPermissionsGranted || status.callRecordingEnabled -> Color(0xFFE65100)
-                                    else -> Color(0xFFD32F2F)
-                                },
+                                status.statusMessage,
+                                color = if (status.isFullyProtected) Color(0xFF2E7D32) else Color(0xFFD32F2F),
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
                             )
 
                             Spacer(Modifier.height(16.dp))
 
-                            // Status breakdown with modern indicators
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            // Simple binary status indicator with appropriate messages
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                StatusItem(
-                                    label = "App Permissions",
-                                    isActive = status.allPermissionsGranted,
-                                    description = if (status.allPermissionsGranted) "All required permissions granted" else "Some permissions missing"
+                                // Single status dot
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .background(
+                                            color = if (status.isFullyProtected) Color(0xFF4CAF50) else Color(0xFFD32F2F),
+                                            shape = androidx.compose.foundation.shape.CircleShape
+                                        )
                                 )
 
-                                StatusItem(
-                                    label = "Call Recording",
-                                    isActive = status.callRecordingEnabled,
-                                    description = if (status.callRecordingEnabled) "Recording system operational" else "Recording not detected"
-                                )
+                                Spacer(Modifier.width(8.dp))
+
+                                Column {
+                                    Text(
+                                        status.detailMessage,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+
+                                    // Show call recording guidance only when we detect it's NOT working (not when we can't check)
+                                    if (status.callRecordingStatus == ProtectionStatusManager.CallRecordingStatus.NOT_WORKING) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            "If call recording is enabled, status will update after your next call",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

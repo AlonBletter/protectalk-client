@@ -34,7 +34,6 @@ class PermissionManager(private val activity: ComponentActivity) {
 
         // Audio processing permissions for scam detection
         private val AUDIO_PERMISSIONS = listOfNotNull(
-            Manifest.permission.RECORD_AUDIO,
             Manifest.permission.READ_EXTERNAL_STORAGE,
             // Only request READ_MEDIA_AUDIO on Android 13+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

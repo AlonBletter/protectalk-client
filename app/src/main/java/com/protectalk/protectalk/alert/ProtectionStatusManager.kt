@@ -18,19 +18,29 @@ object ProtectionStatusManager {
     private const val TAG = "ProtectionStatusManager"
 
     /**
-     * Data class representing the overall protection status
+     * Data class representing the overall protection status - binary ON/OFF only
      */
     data class ProtectionStatus(
         val allPermissionsGranted: Boolean,
-        val callRecordingEnabled: Boolean,
-        val isFullyProtected: Boolean = allPermissionsGranted && callRecordingEnabled,
-        val statusMessage: String
+        val callRecordingStatus: CallRecordingStatus,
+        val isFullyProtected: Boolean,
+        val statusMessage: String,
+        val detailMessage: String
     )
 
     /**
+     * Represents the call recording status
+     */
+    enum class CallRecordingStatus {
+        WORKING,        // Call recording is confirmed working
+        NOT_WORKING,    // Call recording is confirmed not working
+        CANNOT_CHECK    // Cannot check due to missing permissions
+    }
+
+    /**
      * Checks the complete protection status including permissions and call recording functionality.
-     * This should be called when the home screen appears to provide real-time status.
-     * Uses the same permission checking logic as AlertManager and the monitoring service.
+     * Protection is either fully ON (all requirements met) or completely OFF.
+     * No partial protection states.
      *
      * @param context The application context
      * @return ProtectionStatus containing all status information
@@ -43,20 +53,82 @@ object ProtectionStatusManager {
         val audioPermissionsGranted = PermissionManager.checkAudioPermissions(context)
         val allPermissionsGranted = essentialPermissionsGranted && audioPermissionsGranted
 
-        // Check call recording functionality
-        val callRecordingEnabled = checkCallRecordingStatus(context)
+        // Check call recording functionality (nullable result)
+        val callRecordingResult = checkCallRecordingStatus(context)
+        val callRecordingStatus = when (callRecordingResult) {
+            true -> CallRecordingStatus.WORKING
+            false -> CallRecordingStatus.NOT_WORKING
+            null -> CallRecordingStatus.CANNOT_CHECK
+        }
 
-        // Generate status message
-        val statusMessage = generateStatusMessage(allPermissionsGranted, callRecordingEnabled)
+        // Protection is binary: either fully ON or completely OFF
+        // If we can't check call recording due to permissions, protection is OFF
+        val isProtectionOn = allPermissionsGranted && (callRecordingStatus == CallRecordingStatus.WORKING)
+
+        // Generate binary status message
+        val statusMessage = if (isProtectionOn) {
+            "Protection active"
+        } else {
+            "Protection disabled"
+        }
+
+        // Generate detailed message based on the specific issue
+        val detailMessage = when {
+            !allPermissionsGranted -> {
+                val missingItems = mutableListOf<String>()
+
+                // Check each essential permission individually
+                if (!essentialPermissionsGranted) {
+                    val missingEssential = PermissionManager.getMissingEssentialPermissions(context)
+
+                    // Add each missing essential permission as a separate item
+                    if (missingEssential.any { it.contains("READ_PHONE_STATE") }) {
+                        missingItems.add("phone access")
+                    }
+                    if (missingEssential.any { it.contains("READ_CALL_LOG") }) {
+                        missingItems.add("call log access")
+                    }
+                    if (missingEssential.any { it.contains("READ_CONTACTS") }) {
+                        missingItems.add("contact access")
+                    }
+                    if (missingEssential.any { it.contains("POST_NOTIFICATIONS") }) {
+                        missingItems.add("notification permissions")
+                    }
+                }
+
+                // Check each audio permission individually
+                if (!audioPermissionsGranted) {
+                    val missingAudio = PermissionManager.getMissingAudioPermissions(context)
+                    if (missingAudio.any { it.contains("READ_EXTERNAL_STORAGE") }) {
+                        missingItems.add("storage access")
+                    }
+                    if (missingAudio.any { it.contains("READ_MEDIA_AUDIO") }) {
+                        missingItems.add("media access")
+                    }
+                }
+
+                // If no specific permissions identified, show generic message
+                if (missingItems.isEmpty()) {
+                    "Grant required app permissions"
+                } else {
+                    "Grant ${missingItems.joinToString(", ")} to continue"
+                }
+            }
+            callRecordingStatus == CallRecordingStatus.CANNOT_CHECK -> "Enable permissions to verify call recording"
+            callRecordingStatus == CallRecordingStatus.NOT_WORKING -> "Enable call recording in your phone settings"
+            else -> "Everything looks great! You're protected"
+        }
 
         val status = ProtectionStatus(
             allPermissionsGranted = allPermissionsGranted,
-            callRecordingEnabled = callRecordingEnabled,
-            statusMessage = statusMessage
+            callRecordingStatus = callRecordingStatus,
+            isFullyProtected = isProtectionOn,
+            statusMessage = statusMessage,
+            detailMessage = detailMessage
         )
 
-        Log.i(TAG, "✅ Protection status check complete: $status")
-        Log.d(TAG, "Permission details: Essential=$essentialPermissionsGranted, Audio=$audioPermissionsGranted")
+        Log.i(TAG, "Protection status check complete: ${if (isProtectionOn) "ON" else "OFF"}")
+        Log.d(TAG, "Permission details: Essential=$essentialPermissionsGranted, Audio=$audioPermissionsGranted, Recording=$callRecordingStatus")
 
         return status
     }
@@ -64,12 +136,19 @@ object ProtectionStatusManager {
     /**
      * Checks if call recording is working by comparing the latest recording
      * with the most recent call from the call log.
+     * Returns null if we can't check due to missing permissions.
      *
      * @param context The application context
-     * @return True if call recording appears to be working, false otherwise
+     * @return True if recording is working, false if not working, null if can't check due to permissions
      */
-    private fun checkCallRecordingStatus(context: Context): Boolean {
+    private fun checkCallRecordingStatus(context: Context): Boolean? {
         try {
+            // First check if we have permission to read call log
+            if (!PermissionManager.checkEssentialPermissions(context)) {
+                Log.d(TAG, "📞 Cannot check call recording - missing essential permissions")
+                return null // Can't check without permissions
+            }
+
             // Get the most recent call from call log
             val lastCallTime = getLastCallTime(context)
             if (lastCallTime == null) {
@@ -81,9 +160,12 @@ object ProtectionStatusManager {
             // Use RecordingFinder to check if recording is working
             return RecordingFinder.isCallRecordingWorking(context, lastCallTime)
 
+        } catch (e: SecurityException) {
+            Log.w(TAG, "❌ Cannot check call recording due to permission denial: ${e.message}")
+            return null // Can't check due to permissions
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error checking call recording status: ${e.message}", e)
-            return false
+            return false // Actual error - mark as not working
         }
     }
 
@@ -122,32 +204,6 @@ object ProtectionStatusManager {
             return null
         } finally {
             cursor?.close()
-        }
-    }
-
-    /**
-     * Generates a user-friendly status message based on the protection status.
-     *
-     * @param allPermissionsGranted Whether all required permissions are granted
-     * @param callRecordingEnabled Whether call recording is working
-     * @return A descriptive status message
-     */
-    private fun generateStatusMessage(
-        allPermissionsGranted: Boolean,
-        callRecordingEnabled: Boolean
-    ): String {
-        return when {
-            allPermissionsGranted && callRecordingEnabled ->
-                "✅ Full protection active - All permissions granted and call recording working"
-
-            allPermissionsGranted && !callRecordingEnabled ->
-                "⚠️ Partial protection - Permissions granted but call recording not detected"
-
-            !allPermissionsGranted && callRecordingEnabled ->
-                "⚠️ Partial protection - Call recording working but some permissions missing"
-
-            else ->
-                "❌ Protection disabled - Missing permissions and call recording not working"
         }
     }
 
