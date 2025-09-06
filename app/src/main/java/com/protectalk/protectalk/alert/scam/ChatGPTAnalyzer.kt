@@ -34,12 +34,7 @@ class ChatGPTAnalyzer(private val apiKey: String) {
         private const val MODEL_NAME: String = "gpt-4-turbo"
         private const val TEMPERATURE: Double = 0.2
 
-        private const val SCAM_SCORE_KEY = "scam_score"
-        private const val ANALYSIS_KEY = "analysis"
-
         private val JSON_MEDIA_TYPE = "application/json".toMediaTypeOrNull()
-
-        private const val MAX_ANALYSIS_POINTS = 3
 
         private const val SYSTEM_PROMPT = """
 You are an expert scam detection AI. Analyze the following phone call transcript and determine if it's a scam call.
@@ -149,18 +144,13 @@ Transcript to analyze:
 
         val scamScore: Double = resultJson.optDouble("scamScore", 0.0)
 
-        // Get the analysis field directly as requested
+        // Get the analysis field directly as requested - this is what should be sent to server
         val analysis: String = resultJson.optString("analysis", "No analysis provided")
 
-        // Also get indicators as backup
-        val analysisJsonArray: JSONArray = resultJson.optJSONArray("indicators") ?: JSONArray()
-        val bulletPoints: List<String> = List(analysisJsonArray.length()) { i ->
-            analysisJsonArray.optString(i)
-        }.take(MAX_ANALYSIS_POINTS)
-
+        // Always use the analysis field as the first element, never fall back to indicators for server use
         ScamResult(
             score = scamScore,
-            analysisPoints = if (analysis.isNotBlank()) listOf(analysis) else bulletPoints
+            analysisPoints = listOf(analysis) // Always use analysis field, even if empty
         )
     }
 }
