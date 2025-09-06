@@ -195,37 +195,3 @@ fun HomeScreen() {
     }
 }
 
-@Composable
-fun StatusItem(label: String, isActive: Boolean, description: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Indicator dot
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .background(
-                    color = if (isActive) Color(0xFF4CAF50) else Color(0xFFD32F2F),
-                    shape = androidx.compose.foundation.shape.CircleShape
-                )
-        )
-
-        Spacer(Modifier.width(8.dp))
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
