@@ -119,10 +119,103 @@ object RecordingFinder {
 
     /**
      * Legacy method for backward compatibility
-     * @deprecated Use findAndPrepareLatestRecording(context) instead
      */
-    @Deprecated("Use findAndPrepareLatestRecording(context) instead")
     fun findLatestRecording(): File? {
         return findLatestRecordingFile()
+    }
+
+    /**
+     * Checks if call recording is working by comparing the latest recording timestamp
+     * with the last call time within a 60-second delta.
+     * Uses the same logic as findAndPrepareLatestRecording to ensure consistency.
+     *
+     * @param context The application context for accessing call log
+     * @param lastCallStartTime The start time of the last call in milliseconds (System.currentTimeMillis())
+     * @return True if call recording appears to be working, false otherwise
+     */
+    fun isCallRecordingWorking(context: Context, lastCallStartTime: Long): Boolean {
+        Log.d(LOG_TAG, "🔍 Checking if call recording is working...")
+
+        // Use the same logic as findAndPrepareLatestRecording to find the recording
+        // This ensures we're checking the exact same file that would be used for analysis
+        val latestRecordingFile = findLatestRecordingFile()
+        if (latestRecordingFile == null) {
+            Log.w(LOG_TAG, "❌ No recording files found - call recording not working")
+            return false
+        }
+
+        Log.d(LOG_TAG, "📁 Found recording file for verification: ${latestRecordingFile.absolutePath}")
+
+        // Validate that this file would actually be processable
+        // (same validation as in findAndPrepareLatestRecording)
+        if (!latestRecordingFile.exists() || !latestRecordingFile.isFile) {
+            Log.w(LOG_TAG, "❌ Recording file is not valid - call recording not working")
+            return false
+        }
+
+        // Extract timestamp from filename if possible, otherwise use file modification time
+        val recordingTimestamp = extractTimestampFromFilename(latestRecordingFile)
+            ?: latestRecordingFile.lastModified()
+
+        // Compare with last call time (60-second tolerance)
+        val timeDelta = Math.abs(recordingTimestamp - lastCallStartTime)
+        val isWithinTolerance = timeDelta <= 60_000L // 60 seconds in milliseconds
+
+        Log.d(LOG_TAG, "📊 Recording check - File: ${latestRecordingFile.name}")
+        Log.d(LOG_TAG, "📊 Recording check - Call time: $lastCallStartTime, Recording time: $recordingTimestamp, Delta: ${timeDelta}ms")
+        Log.d(LOG_TAG, if (isWithinTolerance) "✅ Call recording appears to be working" else "❌ Call recording not working - delta too large")
+
+        return isWithinTolerance
+    }
+
+    /**
+     * Attempts to extract timestamp from recording filename.
+     * Common patterns include timestamps in various formats.
+     *
+     * @param file The recording file
+     * @return Timestamp in milliseconds, or null if extraction failed
+     */
+    private fun extractTimestampFromFilename(file: File): Long? {
+        val filename = file.nameWithoutExtension
+
+        // Try various timestamp patterns commonly used in call recording filenames
+        val timestampPatterns = listOf(
+            // Pattern: YYYYMMDD_HHMMSS
+            "\\d{8}_\\d{6}".toRegex(),
+            // Pattern: YYYY-MM-DD-HH-MM-SS
+            "\\d{4}-\\d{2}-\\d{2}-\\d{2}-\\d{2}-\\d{2}".toRegex(),
+            // Pattern: Unix timestamp (10 digits)
+            "\\d{10}".toRegex(),
+            // Pattern: Unix timestamp with milliseconds (13 digits)
+            "\\d{13}".toRegex()
+        )
+
+        for (pattern in timestampPatterns) {
+            val match = pattern.find(filename)
+            if (match != null) {
+                return try {
+                    val timestampStr = match.value
+                    when (timestampStr.length) {
+                        8 -> { // YYYYMMDD format, assume start of day
+                            val year = timestampStr.substring(0, 4).toInt()
+                            val month = timestampStr.substring(4, 6).toInt()
+                            val day = timestampStr.substring(6, 8).toInt()
+                            java.util.Calendar.getInstance().apply {
+                                set(year, month - 1, day, 0, 0, 0)
+                                set(java.util.Calendar.MILLISECOND, 0)
+                            }.timeInMillis
+                        }
+                        10 -> timestampStr.toLong() * 1000L // Unix timestamp to milliseconds
+                        13 -> timestampStr.toLong() // Already in milliseconds
+                        else -> null
+                    }
+                } catch (e: Exception) {
+                    Log.w(LOG_TAG, "Failed to parse timestamp from filename: ${match.value}")
+                    null
+                }
+            }
+        }
+
+        return null
     }
 }

@@ -1,16 +1,19 @@
 package com.protectalk.protectalk.ui.home
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.protectalk.protectalk.R
+import com.protectalk.protectalk.alert.ProtectionStatusManager
 import com.protectalk.protectalk.domain.RegisterDeviceUseCase
 import kotlinx.coroutines.launch
 
@@ -27,14 +30,38 @@ fun HomeScreen() {
     val scope = rememberCoroutineScope()
     val registerDeviceUseCase = remember { RegisterDeviceUseCase() }
 
+    // State for protection status
+    var protectionStatus by remember { mutableStateOf<ProtectionStatusManager.ProtectionStatus?>(null) }
+    var isCheckingStatus by remember { mutableStateOf(false) }
+
     // Register device when HomeScreen is first composed (for existing users who sign in)
     LaunchedEffect(Unit) {
         scope.launch {
             try {
                 registerDeviceUseCase(context)
                 // Don't need to handle the result here - it's best-effort
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Silently handle errors - device registration is not critical for app functionality
+            }
+        }
+    }
+
+    // Check protection status when home screen appears
+    LaunchedEffect(Unit) {
+        scope.launch {
+            isCheckingStatus = true
+            try {
+                val status = ProtectionStatusManager.checkProtectionStatus(context)
+                protectionStatus = status
+            } catch (_: Exception) {
+                // Handle error by showing a fallback status
+                protectionStatus = ProtectionStatusManager.ProtectionStatus(
+                    allPermissionsGranted = false,
+                    callRecordingEnabled = false,
+                    statusMessage = "❌ Unable to check protection status"
+                )
+            } finally {
+                isCheckingStatus = false
             }
         }
     }
@@ -58,28 +85,141 @@ fun HomeScreen() {
                     .padding(bottom = 32.dp)
             )
 
-            Text("Welcome!", style = MaterialTheme.typography.headlineSmall)
-            Spacer(Modifier.height(16.dp))
+            // Protection Status Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+                    )
+                    .padding(20.dp)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Protection Status",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
 
-            OutlinedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Status", style = MaterialTheme.typography.titleSmall)
-                    Text("You're signed in. Protections are not configured yet.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+                        if (isCheckingStatus) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            protectionStatus?.let { status ->
+                                // Status indicator
+                                Box(
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .background(
+                                            color = when {
+                                                status.isFullyProtected -> Color(0xFF4CAF50)
+                                                status.allPermissionsGranted || status.callRecordingEnabled -> Color(0xFFFF9800)
+                                                else -> Color(0xFFF44336)
+                                            },
+                                            shape = androidx.compose.foundation.shape.CircleShape
+                                        )
+                                )
+                            }
+                        }
+                    }
 
-            Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(16.dp))
 
-            OutlinedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Notifications", style = MaterialTheme.typography.titleSmall)
-                    Text("No alerts yet. (UI only — logic TODO later)",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (isCheckingStatus) {
+                        Text(
+                            "Analyzing protection configuration...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        protectionStatus?.let { status ->
+                            // Main status message (cleaned up)
+                            val cleanStatusMessage = when {
+                                status.isFullyProtected -> "Full protection active"
+                                status.allPermissionsGranted && !status.callRecordingEnabled -> "Partial protection - Call recording issue"
+                                !status.allPermissionsGranted && status.callRecordingEnabled -> "Partial protection - Missing permissions"
+                                else -> "Protection disabled"
+                            }
+
+                            Text(
+                                cleanStatusMessage,
+                                color = when {
+                                    status.isFullyProtected -> Color(0xFF2E7D32)
+                                    status.allPermissionsGranted || status.callRecordingEnabled -> Color(0xFFE65100)
+                                    else -> Color(0xFFD32F2F)
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                            )
+
+                            Spacer(Modifier.height(16.dp))
+
+                            // Status breakdown with modern indicators
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                StatusItem(
+                                    label = "App Permissions",
+                                    isActive = status.allPermissionsGranted,
+                                    description = if (status.allPermissionsGranted) "All required permissions granted" else "Some permissions missing"
+                                )
+
+                                StatusItem(
+                                    label = "Call Recording",
+                                    isActive = status.callRecordingEnabled,
+                                    description = if (status.callRecordingEnabled) "Recording system operational" else "Recording not detected"
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
             Spacer(Modifier.height(20.dp))
+        }
+    }
+}
+
+@Composable
+fun StatusItem(label: String, isActive: Boolean, description: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Indicator dot
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(
+                    color = if (isActive) Color(0xFF4CAF50) else Color(0xFFD32F2F),
+                    shape = androidx.compose.foundation.shape.CircleShape
+                )
+        )
+
+        Spacer(Modifier.width(8.dp))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
