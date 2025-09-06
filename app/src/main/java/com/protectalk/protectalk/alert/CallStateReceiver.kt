@@ -21,6 +21,7 @@ class CallStateReceiver : BroadcastReceiver() {
     private var lastIncomingNumber: String? = null
     private var lastProcessedTime = 0L // To prevent duplicate processing
     private var lastCallDuration = 0 // To store the duration of the last call
+    private var callStartTime = 0L // Track when the call started
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != TelephonyManager.ACTION_PHONE_STATE_CHANGED) {
@@ -28,13 +29,15 @@ class CallStateReceiver : BroadcastReceiver() {
         }
 
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
+        val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
         val currentTime = System.currentTimeMillis()
 
         Log.d(TAG, "Phone state changed: $state (last state was $lastCallState)")
+        Log.d(TAG, "Incoming number from intent: $incomingNumber")
 
         when (state) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
-                onCallRinging()
+                onCallRinging(incomingNumber)
             }
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {
                 onCallAnswered()
@@ -57,40 +60,54 @@ class CallStateReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun onCallRinging() {
-        Log.d(TAG, "Call ringing - will get number from call log when call ends")
-        // We'll get the number from call log when the call ends instead
+    private fun onCallRinging(incomingNumber: String?) {
+        Log.d(TAG, "Call ringing from: $incomingNumber")
+        lastIncomingNumber = incomingNumber
+        callStartTime = System.currentTimeMillis()
     }
 
     private fun onCallAnswered() {
         Log.d(TAG, "Call answered")
+        if (callStartTime == 0L) {
+            callStartTime = System.currentTimeMillis() // Fallback if we missed ringing
+        }
     }
 
     private fun onCallEnded(context: Context) {
-        Log.d(TAG, "Call ended - checking recent call log")
+        Log.d(TAG, "Call ended - last incoming number was: $lastIncomingNumber")
 
         // Only process if we had a call (not just going from offhook to idle)
         if (lastCallState == TelephonyManager.CALL_STATE_RINGING ||
             lastCallState == TelephonyManager.CALL_STATE_OFFHOOK) {
 
-            // Get the most recent call from call log
-            CoroutineScope(Dispatchers.IO).launch {
-                getRecentCallNumber(context)?.let { phoneNumber ->
-                    handleIncomingCallEnded(context, phoneNumber)
-                }
+            val phoneNumber = if (!lastIncomingNumber.isNullOrBlank()) {
+                // Use the number we captured during ringing
+                Log.d(TAG, "Using captured incoming number: $lastIncomingNumber")
+                lastIncomingNumber!!
+            } else {
+                // Fallback to call log lookup with time-based filtering
+                Log.d(TAG, "No captured number, falling back to call log lookup")
+                getRecentCallNumberWithTimeFilter(context)
+            }
+
+            phoneNumber?.let { number ->
+                handleIncomingCallEnded(context, number)
+            } ?: run {
+                Log.w(TAG, "Could not determine phone number for ended call")
             }
         }
 
         // Reset state
         lastIncomingNumber = null
+        callStartTime = 0L
     }
 
     /**
-     * Gets the most recent call number from the call log (modern approach)
+     * Gets the most recent call from call log with time-based filtering to ensure we get the call that just ended
      */
-    private fun getRecentCallNumber(context: Context): String? {
+    private fun getRecentCallNumberWithTimeFilter(context: Context): String? {
         try {
-            Log.d(TAG, "Querying call log for recent calls...")
+            Log.d(TAG, "Querying call log for recent calls with time filter...")
 
             val projection = arrayOf(
                 CallLog.Calls.NUMBER,
@@ -99,11 +116,16 @@ class CallStateReceiver : BroadcastReceiver() {
                 CallLog.Calls.DURATION
             )
 
+            // Look for calls that started within the last 5 minutes and are very recent
+            val fiveMinutesAgo = System.currentTimeMillis() - (5 * 60 * 1000)
+            val selection = "${CallLog.Calls.DATE} > ?"
+            val selectionArgs = arrayOf(fiveMinutesAgo.toString())
+
             val cursor: Cursor? = context.contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
                 projection,
-                null,
-                null,
+                selection,
+                selectionArgs,
                 "${CallLog.Calls.DATE} DESC"
             )
 
@@ -111,7 +133,7 @@ class CallStateReceiver : BroadcastReceiver() {
                 Log.d(TAG, "Call log query returned ${it.count} records")
 
                 var recordCount = 0
-                while (it.moveToNext() && recordCount < 5) { // Check first 5 records for debugging
+                while (it.moveToNext() && recordCount < 3) { // Check first 3 recent records
                     recordCount++
 
                     val numberIndex = it.getColumnIndex(CallLog.Calls.NUMBER)
@@ -133,12 +155,11 @@ class CallStateReceiver : BroadcastReceiver() {
                         }
 
                         val timeAgo = System.currentTimeMillis() - date
-                        Log.d(TAG, "Call record #$recordCount: number=$number, type=$typeString, ${timeAgo}ms ago, duration=${duration}s")
+                        Log.d(TAG, "Recent call record #$recordCount: number=$number, type=$typeString, ${timeAgo}ms ago, duration=${duration}s")
 
-                        // Return the first incoming or missed call we find, including duration
-                        if (type == CallLog.Calls.INCOMING_TYPE || type == CallLog.Calls.MISSED_TYPE) {
+                        // Return the first incoming or missed call we find that's very recent
+                        if ((type == CallLog.Calls.INCOMING_TYPE || type == CallLog.Calls.MISSED_TYPE) && timeAgo < 30000) { // Within 30 seconds
                             Log.i(TAG, "Found recent incoming/missed call from: $number (type: $typeString, duration: ${duration}s)")
-                            // Store duration for later use
                             lastCallDuration = duration.toInt()
                             return number
                         }
@@ -146,9 +167,9 @@ class CallStateReceiver : BroadcastReceiver() {
                 }
 
                 if (recordCount == 0) {
-                    Log.w(TAG, "No call records found in call log")
+                    Log.w(TAG, "No recent call records found in call log")
                 } else {
-                    Log.d(TAG, "No incoming/missed calls found in the last $recordCount records")
+                    Log.d(TAG, "No recent incoming/missed calls found in the last $recordCount records")
                 }
             }
         } catch (e: SecurityException) {
