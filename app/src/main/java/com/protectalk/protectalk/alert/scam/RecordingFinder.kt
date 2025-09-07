@@ -128,11 +128,13 @@ object RecordingFinder {
      * Checks if call recording is working by comparing the latest recording timestamp
      * with the last call time within a 60-second delta.
      * Uses the same logic as findAndPrepareLatestRecording to ensure consistency.
+     * Automatically retrieves call duration from call logs for accurate comparison.
      *
+     * @param context The application context for accessing call logs
      * @param lastCallStartTime The start time of the last call in milliseconds (System.currentTimeMillis())
      * @return True if call recording appears to be working, false otherwise
      */
-    fun isCallRecordingWorking(lastCallStartTime: Long): Boolean {
+    fun isCallRecordingWorking(context: Context, lastCallStartTime: Long): Boolean {
         Log.d(LOG_TAG, "🔍 Checking if call recording is working...")
 
         // Use the same logic as findAndPrepareLatestRecording to find the recording
@@ -156,15 +158,71 @@ object RecordingFinder {
         val recordingTimestamp = extractTimestampFromFilename(latestRecordingFile)
             ?: latestRecordingFile.lastModified()
 
-        // Compare with last call time (60-second tolerance)
-        val timeDelta = Math.abs(recordingTimestamp - lastCallStartTime)
+        // Get call duration from call logs to calculate expected call end time
+        val callDurationMs = getLastCallDuration(context, lastCallStartTime)
+        val expectedCallEndTime = lastCallStartTime + callDurationMs
+
+        // Compare with expected call end time (60-second tolerance)
+        val timeDelta = Math.abs(recordingTimestamp - expectedCallEndTime)
         val isWithinTolerance = timeDelta <= 60_000L // 60 seconds in milliseconds
 
         Log.d(LOG_TAG, "📊 Recording check - File: ${latestRecordingFile.name}")
-        Log.d(LOG_TAG, "📊 Recording check - Call time: $lastCallStartTime, Recording time: $recordingTimestamp, Delta: ${timeDelta}ms")
+        Log.d(LOG_TAG, "📊 Recording check - Call start: $lastCallStartTime, Duration: ${callDurationMs}ms, Expected end: $expectedCallEndTime")
+        Log.d(LOG_TAG, "📊 Recording check - Recording time: $recordingTimestamp, Delta from expected end: ${timeDelta}ms")
         Log.d(LOG_TAG, if (isWithinTolerance) "✅ Call recording appears to be working" else "❌ Call recording not working - delta too large")
 
         return isWithinTolerance
+    }
+
+    /**
+     * Retrieves the duration of the last call from call logs.
+     *
+     * @param context The application context for accessing call logs
+     * @param callStartTime The start time of the call to find duration for
+     * @return Duration in milliseconds, or 0 if not found
+     */
+    private fun getLastCallDuration(context: Context, callStartTime: Long): Long {
+        try {
+            val projection = arrayOf(
+                android.provider.CallLog.Calls.DATE,
+                android.provider.CallLog.Calls.DURATION
+            )
+
+            // Query call logs for calls around the given start time (within 2 minutes tolerance)
+            val selection = "${android.provider.CallLog.Calls.DATE} BETWEEN ? AND ?"
+            val startWindow = callStartTime - 120_000L // 2 minutes before
+            val endWindow = callStartTime + 120_000L // 2 minutes after
+            val selectionArgs = arrayOf(startWindow.toString(), endWindow.toString())
+
+            val cursor = context.contentResolver.query(
+                android.provider.CallLog.Calls.CONTENT_URI,
+                projection,
+                selection,
+                selectionArgs,
+                "${android.provider.CallLog.Calls.DATE} DESC"
+            )
+
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val dateColumnIndex = it.getColumnIndex(android.provider.CallLog.Calls.DATE)
+                    val durationColumnIndex = it.getColumnIndex(android.provider.CallLog.Calls.DURATION)
+
+                    if (dateColumnIndex >= 0 && durationColumnIndex >= 0) {
+                        val callDate = it.getLong(dateColumnIndex)
+                        val durationSeconds = it.getInt(durationColumnIndex)
+                        val durationMs = durationSeconds * 1000L
+
+                        Log.d(LOG_TAG, "📞 Found call in logs - Date: $callDate, Duration: ${durationMs}ms")
+                        return durationMs
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(LOG_TAG, "⚠️ Failed to retrieve call duration from call logs: ${e.message}")
+        }
+
+        Log.w(LOG_TAG, "⚠️ No matching call found in logs - using 0ms duration")
+        return 0L
     }
 
     /**

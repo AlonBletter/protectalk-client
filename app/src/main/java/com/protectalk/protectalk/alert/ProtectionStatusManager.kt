@@ -158,7 +158,7 @@ object ProtectionStatusManager {
             }
 
             // Use RecordingFinder to check if recording is working
-            return RecordingFinder.isCallRecordingWorking(lastCallTime)
+            return RecordingFinder.isCallRecordingWorking(context, lastCallTime)
 
         } catch (e: SecurityException) {
             Log.w(TAG, "❌ Cannot check call recording due to permission denial: ${e.message}")
