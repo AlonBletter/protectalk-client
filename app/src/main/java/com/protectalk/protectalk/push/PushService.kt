@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.Color
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -191,12 +192,17 @@ class PushService : FirebaseMessagingService() {
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
 
         if (isHighPriority) {
             notificationBuilder
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_ALARM)
                 .setVibrate(longArrayOf(0, 1000, 500, 1000))
+        } else {
+            notificationBuilder
+                .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+                .setVibrate(longArrayOf(0, 200))
         }
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -205,9 +211,12 @@ class PushService : FirebaseMessagingService() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance).apply {
                 description = CHANNEL_DESCRIPTION
+                enableVibration(true)
+                enableLights(true)
+                lightColor = Color.BLUE
             }
 
             val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager

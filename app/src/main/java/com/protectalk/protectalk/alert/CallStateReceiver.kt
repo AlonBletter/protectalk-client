@@ -177,7 +177,7 @@ class CallStateReceiver : BroadcastReceiver() {
 
         Log.d(TAG, "Contact check result for $phoneNumber: isKnown=$isKnownNumber")
 
-        if (isKnownNumber) {
+        if (!isKnownNumber) {
             Log.i(TAG, "Unknown number detected: $phoneNumber")
 
             // Trigger the alert flow for unknown caller with duration
