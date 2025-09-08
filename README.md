@@ -44,7 +44,7 @@ This provides timely and reliable feedback that helps protect people from fraudu
 - 🎨 **Modern UI** → Compose + Material 3 theming
 
 ---
-## 🚀 Deployment & Setup (Client)
+## 🚀 Deployment & Setup
 
 ### Prerequisites
 - Android Studio (Arctic Fox or newer)  
