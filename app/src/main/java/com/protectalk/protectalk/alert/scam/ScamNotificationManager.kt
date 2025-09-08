@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.graphics.Color
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.protectalk.protectalk.R
 
@@ -21,7 +22,6 @@ object ScamNotificationManager {
     // == Notification ID Constants ==
     private const val NOTIFICATION_ID_SCAM_CALL_DETECTED: Int = 2
     private const val NOTIFICATION_ID_SAFE_CALL: Int = 3
-    private const val NOTIFICATION_ID_PROCESSING = 4
 
     // == Notification Text Constants ==
     private const val NOTIFICATION_TITLE_SCAM_CALL: String = "⚠️ Potential Scam Call Detected!"
@@ -52,33 +52,8 @@ object ScamNotificationManager {
     }
 
     /**
-     * Shows a processing notification while analyzing the call
-     */
-    fun showProcessingNotification(context: Context, phoneNumber: String) {
-        val processingNotification = NotificationCompat.Builder(
-            context,
-            SCAM_ALERT_NOTIFICATION_CHANNEL_ID
-        )
-            .setContentTitle("Analyzing Call...")
-            .setContentText("Processing call from $phoneNumber")
-            .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setOngoing(true)
-            .build()
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID_PROCESSING, processingNotification)
-    }
-
-    /**
-     * Dismisses the processing notification
-     */
-    fun dismissProcessingNotification(context: Context) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.cancel(NOTIFICATION_ID_PROCESSING)
-    }
-
-    /**
-     * Shows a scam alert notification with risk score and analysis
+     * Shows a scam alert notification with risk score and analysis.
+     * Consolidated method that handles all scam notification display logic.
      */
     fun showScamAlert(
         context: Context,
@@ -86,73 +61,85 @@ object ScamNotificationManager {
         scamScore: Double,
         analysis: String
     ) {
+        // Ensure notification channel is created first
+        createScamAlertNotificationChannel(context)
+
         val riskPercentage = (scamScore * 100).toInt()
+        val analysisPoints = analysis.split("; ").filter { it.isNotBlank() }
 
-        // Use the existing method that matches ProtecTalkService logic
-        showScamCallDetectedNotification(
-            context,
-            riskPercentage,
-            analysis.split("; ").filter { it.isNotBlank() }
-        )
-    }
-
-    /**
-     * Sends a notification indicating that a potential scam call was detected.
-     */
-    fun showScamCallDetectedNotification(
-        applicationContext: Context,
-        scamRiskScore: Int,
-        scamAnalysisDetails: List<String>
-    ) {
-        val detailedScamMessage =
-            "Risk Score: $scamRiskScore\n${scamAnalysisDetails.joinToString(separator = "\n")}"
+        // Create detailed message with phone number
+        val detailedScamMessage = buildString {
+            append("Phone: $callerNumber\n")
+            append("Risk Score: $riskPercentage%")
+            if (analysisPoints.isNotEmpty()) {
+                append("\n\nAnalysis:")
+                analysisPoints.forEach { point ->
+                    append("\n• $point")
+                }
+            }
+        }
 
         val scamAlertNotification = NotificationCompat.Builder(
-            applicationContext,
+            context,
             SCAM_ALERT_NOTIFICATION_CHANNEL_ID
         )
             .setContentTitle(NOTIFICATION_TITLE_SCAM_CALL)
-            .setContentText(detailedScamMessage)
+            .setContentText("Phone: $callerNumber - Risk: $riskPercentage%")
             .setStyle(NotificationCompat.BigTextStyle().bigText(detailedScamMessage))
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setSmallIcon(R.drawable.ic_notification)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
+            .setVibrate(longArrayOf(0, 1000, 500, 1000))
             .build()
 
         val systemNotificationManager: NotificationManager =
-            applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         systemNotificationManager.notify(
             NOTIFICATION_ID_SCAM_CALL_DETECTED,
             scamAlertNotification
         )
+
+        Log.d("ScamNotificationManager", "Scam alert notification shown for $callerNumber with $riskPercentage% risk")
     }
 
     /**
-     * Sends a notification to reassure the user that the current call is safe.
+     * Shows a safe call notification to reassure the user.
      */
-    fun showSafeCallNotification(applicationContext: Context) {
+    fun showSafeCallNotification(context: Context, phoneNumber: String? = null) {
+        // Ensure notification channel is created first
+        createScamAlertNotificationChannel(context)
+
+        val message = if (phoneNumber != null) {
+            "Call from $phoneNumber appears to be safe."
+        } else {
+            NOTIFICATION_BODY_SAFE_CALL
+        }
+
         val safeCallNotification = NotificationCompat.Builder(
-            applicationContext,
+            context,
             SCAM_ALERT_NOTIFICATION_CHANNEL_ID
         )
             .setContentTitle(NOTIFICATION_TITLE_SAFE_CALL)
-            .setContentText(NOTIFICATION_BODY_SAFE_CALL)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(NOTIFICATION_BODY_SAFE_CALL))
-            .setSmallIcon(android.R.drawable.ic_menu_save)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setAutoCancel(true)
+            .setVibrate(longArrayOf(0, 200))
             .build()
 
         val systemNotificationManager: NotificationManager =
-            applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         systemNotificationManager.notify(
             NOTIFICATION_ID_SAFE_CALL,
             safeCallNotification
         )
+
+        Log.d("ScamNotificationManager", "Safe call notification shown${phoneNumber?.let { " for $it" } ?: ""}")
     }
 }
