@@ -120,7 +120,10 @@ class CallStateReceiver : BroadcastReceiver() {
                 Log.d(TAG, "Call log query returned ${it.count} records")
 
                 var recordCount = 0
-                while (it.moveToNext() && recordCount < 3) { // Check first 3 recent records
+                var mostRecentIncoming: String? = null
+
+                // Check up to 10 recent records instead of just 3 to account for mixed call types
+                while (it.moveToNext() && recordCount < 10) {
                     recordCount++
 
                     val numberIndex = it.getColumnIndex(CallLog.Calls.NUMBER)
@@ -144,11 +147,19 @@ class CallStateReceiver : BroadcastReceiver() {
                         val timeAgo = System.currentTimeMillis() - date
                         Log.d(TAG, "Recent call record #$recordCount: number=$number, type=$typeString, ${timeAgo}ms ago, duration=${duration}s")
 
-                        // Return the first incoming or missed call we find that's very recent
-                        if ((type == CallLog.Calls.INCOMING_TYPE || type == CallLog.Calls.MISSED_TYPE) && timeAgo < 30000) { // Within 30 seconds
-                            Log.i(TAG, "Found recent incoming/missed call from: $number (type: $typeString, duration: ${duration}s)")
-                            lastCallDuration = duration.toInt()
-                            return number
+                        // Look for incoming or missed calls within a reasonable time window
+                        if ((type == CallLog.Calls.INCOMING_TYPE || type == CallLog.Calls.MISSED_TYPE) && timeAgo < 300000) { // Within 5 minutes
+                            // Since we're iterating in DESC order, the first incoming/missed call we find is the most recent
+                            if (mostRecentIncoming == null) {
+                                mostRecentIncoming = number
+                                lastCallDuration = duration.toInt()
+
+                                // If it's very recent (within 2 minutes), return immediately
+                                if (timeAgo < 120000) {
+                                    Log.i(TAG, "Found very recent incoming/missed call from: $number (type: $typeString, duration: ${duration}s, ${timeAgo}ms ago)")
+                                    return number
+                                }
+                            }
                         }
                     }
                 }
